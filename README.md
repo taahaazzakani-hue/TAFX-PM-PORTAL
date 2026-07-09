@@ -1,20 +1,29 @@
 # TA Forex Institute — Private Mentorship Portal
 
-A private, invite-approved video mentorship portal (Beginner / Intermediate / Advanced)
-with Bunny Stream video, PDF notes, per-course progress tracking, an admin panel,
-and automatic emails via Resend.
+A private video mentorship portal for TA Forex Institute students.
 
-## Deploy (Vercel)
-1. Push this folder to a GitHub repo (or drag-drop into Vercel).
-2. Framework preset: **Vite**. Build command: `npm run build`. Output dir: `dist`.
-3. Deploy. That's it — the backend (Supabase) is already live.
+## Tech stack
+- Frontend: React 18 + Vite
+- Backend: Supabase (Postgres + Edge Functions)
+- Video: Bunny Stream · Email: Resend · Hosting: Vercel
 
-## Local dev
-```
+## Local development
+```bash
 npm install
 npm run dev
 ```
 
-The Supabase URL + public key are already wired in `src/api.js`.
-All sensitive logic (passwords, emails, admin actions) lives server-side in the
-`pm-api` Supabase Edge Function — nothing secret is in this frontend.
+## Build
+```bash
+npm run build      # outputs to /dist
+```
+
+## Deployment (Vercel)
+Every push to `main` deploys automatically.
+- Build command: `npm run build`
+- Output directory: `dist`
+- Framework preset: Vite
+
+## Notes
+- Backend logic lives in Supabase Edge Functions (pm-api, pm-billing-cron).
+- Secrets (Bunny, Resend, admin email) are set in the Supabase dashboard, not in this repo.
