@@ -1,396 +1,309 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { call, uploadImage } from './api.js';
-import SearchBox from './SearchBox.jsx';
-import ImageGallery from './ImageGallery.jsx';
-
-const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-export default function Journal({ user, confluences, readOnly = false, preloaded = null }) {
-  const myLevels = user.levels || [];
-  const [level, setLevel] = useState(myLevels[0] || 'beginner');
-  const [data, setData] = useState(preloaded);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [q, setQ] = useState('');
-  const [tab, setTab] = useState('journal');
-
-  const load = () => {
-    if (readOnly) { call('admin_journal_entries', { admin_id: user.adminId, user_id: user.id }).then(setData); }
-    else call('journal_list', { user_id: user.id }).then(setData);
-  };
-  useEffect(() => { if (!preloaded) load(); }, []);
-
-  if (!myLevels.length && !readOnly) return <div className="empty"><div className="big serif">No level access yet</div><div>Your mentor hasn't assigned you a stage. Once they do, your journal unlocks.</div></div>;
-  if (!data) return <div className="spinner" />;
-
-  const levelsToShow = readOnly ? ['beginner', 'intermediate', 'advanced'] : myLevels;
-  const entries = data.entries.filter((e) => e.level === level);
-  const stats = data.stats[level] || {};
-  const ql = q.trim().toLowerCase();
-  const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
-
-  async function saveEntry(entry) {
-    await call('journal_save', { user_id: user.id, entry: { ...entry, level } });
-    setShowForm(false); setEditing(null); load();
-  }
-  async function delEntry(id) {
-    if (!confirm('Delete this journal entry?')) return;
-    await call('journal_delete', { user_id: user.id, entry_id: id }); load();
-  }
-
-  return (
-    <div>
-      <div className="admin-tabs">
-        {levelsToShow.map((lv) => (<button key={lv} className={level === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
-      </div>
-
-      {/* Journal / Analytics sub-tabs */}
-      <div style={{ display: 'flex', gap: 8, margin: '4px 0 20px', borderBottom: '1px solid var(--line)' }}>
-        {[['journal', '📓 Journal'], ['analytics', '📊 Analytics']].map(([k, lbl]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', marginBottom: -1, fontSize: 14, fontWeight: 600,
-            color: tab === k ? 'var(--gold)' : 'var(--ink-soft)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
-          }}>{lbl}</button>
-        ))}
-      </div>
-
-      {tab === 'journal' ? (
-        <>
-          <StatsSummary stats={stats} />
-
-          <div style={{ display: 'flex', alignItems: 'center', margin: '22px 0 14px' }}>
-            <h3 className="serif" style={{ fontSize: 22, fontWeight: 500 }}>Trade log</h3>
-            <div style={{ flex: 1 }} />
-            {!readOnly && <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => { setEditing(null); setShowForm(true); }}>+ New entry</button>}
-          </div>
-
-          {entries.length > 0 && <SearchBox value={q} onChange={setQ} placeholder="Search pair, confluence, note or result…" />}
-
-          {entries.length === 0 ? (
-            <div className="empty"><div className="big serif">No trades logged{readOnly ? '' : ' yet'}</div>{!readOnly && <div>Add your first entry to start building your stats.</div>}</div>
-          ) : logEntries.length === 0 ? (
-            <div className="empty"><div>No trades match your search.</div></div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {logEntries.map((e) => (
-                <TradeRow key={e.id} e={e} readOnly={readOnly} onOpen={() => setDetail(e)} onEdit={() => { setEditing(e); setShowForm(true); }} onDel={() => delEntry(e.id)} />
-              ))}
-            </div>
-          )}
-        </>
-      ) : (
-        entries.length === 0 ? (
-          <div className="empty"><div className="big serif">No data yet</div><div>Log some trades and your analytics will appear here.</div></div>
-        ) : (
-          <AnalyticsPanel stats={stats} entries={entries} onDay={(e) => setDetail(e)} />
-        )
-      )}
-
-      {showForm && <EntryForm entry={editing} confluences={confluences} onSave={saveEntry} onClose={() => { setShowForm(false); setEditing(null); }} />}
-      {detail && <EntryDetail entry={detail} readOnly={readOnly} adminId={readOnly ? user.adminId : null} onClose={() => setDetail(null)} onCommented={load} />}
-    </div>
-  );
+:root {
+  --bg: #f6f8fb;          /* cool white page */
+  --bg-2: #ffffff;         /* sidebar / raised */
+  --panel: #ffffff;        /* cards */
+  --panel-2: #eef2f8;      /* hover / inset */
+  --line: #dde4ee;         /* hairline borders */
+  --ink: #131a24;          /* primary text */
+  --ink-soft: #55606f;     /* secondary text */
+  --ink-faint: #909aa8;    /* muted text */
+  --gold: #1f5fbf;         /* primary blue (var name kept for compatibility) */
+  --gold-soft: #1c56ac;    /* blue text on light */
+  --green: #2f9463;
+  --red: #c0473f;
+  --shadow: 0 1px 2px rgba(19,26,36,.04), 0 6px 20px rgba(19,26,36,.06);
+  --shadow-lg: 0 8px 40px rgba(19,26,36,.14);
+  --radius: 12px;
+  --serif: 'Cormorant Garamond', 'Georgia', serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-function TradeRow({ e, readOnly, onOpen, onEdit, onDel }) {
-  const pos = Number(e.pct) >= 0;
-  return (
-    <div className="card" style={{ margin: 0, padding: '14px 16px', cursor: 'pointer' }} onClick={onOpen}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: 44, textAlign: 'center' }}>
-          <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{MONTHS[new Date(Number(e.trade_date)).getMonth()]}</div>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--serif)' }}>{new Date(Number(e.trade_date)).getDate()}</div>
-        </div>
-        <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>{e.pair} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-faint)' }}>{e.direction === 'long' ? '▲ Long' : '▼ Short'}</span></div>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{(e.confluences || []).join(' · ') || '—'}</div>
-        </div>
-        <div style={{ flex: 1 }} />
-        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>📷 {(e.images || []).length}</span>}
-        {e.admin_comment && <span title="Mentor comment" style={{ fontSize: 14 }}>💬</span>}
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
-          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>1:{e.rr} · {Number(e.amount) >= 0 ? '+' : ''}{e.amount}</div>
-        </div>
-        {!readOnly && (
-          <div style={{ display: 'flex', gap: 4 }} onClick={(ev) => ev.stopPropagation()}>
-            <button className="mini-btn" onClick={onEdit}>Edit</button>
-            <button className="mini-btn bad" onClick={onDel}>Del</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: inherit; }
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #c6d0de; border-radius: 20px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.serif { font-family: var(--serif); }
+
+/* ── Auth screens ── */
+.auth-wrap {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 900px) { .auth-wrap { grid-template-columns: 1fr; } }
+
+.auth-visual {
+  position: relative;
+  background: #0a0c10;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+@media (max-width: 900px) { .auth-visual { display: none; } }
+.auth-visual img.bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0.5;
+  filter: saturate(0.9) contrast(1.05);
+}
+.auth-visual::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(10,12,16,.45) 0%, rgba(10,12,16,.75) 55%, rgba(10,12,16,.98) 100%);
+}
+.auth-visual .caption {
+  position: relative; z-index: 2; padding: 56px; max-width: 460px;
+}
+.auth-visual .caption h2 {
+  font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 1.1;
+  letter-spacing: .3px; color: #ffffff;
+}
+.auth-visual .caption p { color: rgba(255,255,255,.85); margin-top: 16px; font-size: 15px; }
+.auth-visual .caption .rule { width: 46px; height: 2px; background: var(--gold); margin: 26px 0; }
+
+.auth-form-side {
+  display: flex; align-items: center; justify-content: center; padding: 40px 28px;
+  background:
+    radial-gradient(1000px 600px at 80% -10%, rgba(31,95,191,.06), transparent 60%),
+    var(--bg);
+}
+.auth-card { width: 100%; max-width: 400px; }
+.brand-mark { display: flex; flex-direction: column; align-items: center; margin-bottom: 30px; }
+.brand-mark img { width: 92px; height: auto; }
+.brand-mark .sub {
+  margin-top: 10px; font-size: 11px; letter-spacing: 5px; text-transform: uppercase; color: var(--gold-soft);
+}
+.auth-card h1 { font-family: var(--serif); font-weight: 500; font-size: 30px; text-align: center; }
+.auth-card .lead { text-align: center; color: var(--ink-soft); font-size: 14px; margin-top: 6px; margin-bottom: 26px; }
+
+.field { margin-bottom: 15px; }
+.field label { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 7px; letter-spacing: .3px; }
+.field input {
+  width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  padding: 12px 14px; border-radius: 9px; font-size: 14px; transition: border-color .15s, box-shadow .15s;
+}
+.field input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(31,95,191,.12); }
+
+.btn {
+  width: 100%; background: var(--gold); color: #fff; border: none; font-weight: 600;
+  padding: 13px; border-radius: 9px; font-size: 14px; letter-spacing: .3px; transition: filter .15s, transform .05s;
+}
+.btn:hover { filter: brightness(1.06); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+.btn.ghost:hover { color: var(--ink); border-color: var(--ink-faint); filter: none; }
+
+.switch-line { text-align: center; margin-top: 20px; font-size: 13px; color: var(--ink-soft); }
+.switch-line button { background: none; border: none; color: var(--gold-soft); font-weight: 600; font-size: 13px; }
+
+.notice { padding: 11px 14px; border-radius: 9px; font-size: 13px; margin-bottom: 16px; }
+.notice.err { background: rgba(209,96,96,.12); color: #e6a0a0; border: 1px solid rgba(209,96,96,.25); }
+.notice.ok { background: rgba(76,175,125,.1); color: #8fd6b1; border: 1px solid rgba(76,175,125,.25); }
+.notice.info { background: rgba(31,95,191,.1); color: var(--gold-soft); border: 1px solid rgba(31,95,191,.22); }
+
+/* ── App shell ── */
+.shell { display: grid; grid-template-columns: 300px 1fr; min-height: 100%; }
+@media (max-width: 980px) { .shell { grid-template-columns: 1fr; } }
+
+.sidebar {
+  background: var(--bg-2); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+@media (max-width: 980px) {
+  .sidebar { position: fixed; z-index: 60; width: 300px; transform: translateX(-100%); transition: transform .25s; }
+  .sidebar.open { transform: translateX(0); }
+}
+.sb-head { padding: 22px 22px 16px; border-bottom: 1px solid var(--line); }
+.sb-head img { width: 54px; }
+.sb-head .sub { font-size: 10px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold-soft); margin-top: 8px; }
+.sb-body { padding: 14px; flex: 1; }
+.sb-section-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--ink-faint); padding: 14px 10px 8px; }
+
+.nav-course { margin-bottom: 6px; }
+.nav-course > .row {
+  display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 9px;
+  color: var(--ink-soft); font-size: 14px; font-weight: 500; transition: background .12s, color .12s; user-select: none;
+}
+.nav-course > .row:hover { background: var(--panel); color: var(--ink); }
+.nav-course > .row.active { background: var(--panel-2); color: var(--ink); }
+.nav-course .stage-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot-beginner { background: #6fae7d; }
+.dot-intermediate { background: var(--gold); }
+.dot-advanced { background: #b06a9c; }
+.nav-course .prog-mini { margin-left: auto; font-size: 11px; color: var(--ink-faint); }
+
+.sb-foot { padding: 14px; border-top: 1px solid var(--line); }
+.user-chip { display: flex; align-items: center; gap: 11px; padding: 8px 6px; }
+.avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), #8a6d2e);
+  display: flex; align-items: center; justify-content: center; color: #14100a; font-weight: 700; font-size: 14px; flex: none; }
+.user-chip .meta { overflow: hidden; }
+.user-chip .meta .n { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-chip .meta .e { font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Main ── */
+.main { min-width: 0; }
+.topbar {
+  display: flex; align-items: center; gap: 14px; padding: 16px 30px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(255,255,255,.88);
+  backdrop-filter: blur(10px); z-index: 30;
+}
+.topbar .burger { display: none; background: none; border: 1px solid var(--line); color: var(--ink);
+  width: 40px; height: 40px; border-radius: 9px; font-size: 18px; }
+@media (max-width: 980px) { .topbar .burger { display: block; } }
+.topbar h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; }
+.topbar .spacer { flex: 1; }
+
+.content { padding: 30px; max-width: 1100px; }
+@media (max-width: 640px) { .content { padding: 20px 16px; } .topbar { padding: 14px 16px; } }
+
+/* Hero on course page */
+.course-hero {
+  border-radius: var(--radius); overflow: hidden; position: relative; margin-bottom: 26px;
+  border: 1px solid var(--line); min-height: 180px; display: flex; align-items: flex-end;
+}
+.course-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .4; }
+.course-hero::after { content: ''; position: absolute; inset: 0;
+  background: linear-gradient(120deg, rgba(14,16,20,.9), rgba(14,16,20,.5)); }
+.course-hero .inner { position: relative; z-index: 2; padding: 26px 28px; }
+.course-hero .eyebrow { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #cddcff; }
+.course-hero h1 { font-family: var(--serif); font-weight: 500; font-size: 38px; margin-top: 6px; color: #ffffff; }
+.course-hero p { color: rgba(255,255,255,.85); margin-top: 6px; max-width: 560px; font-size: 14px; }
+
+.progress-bar { height: 6px; background: var(--panel); border-radius: 20px; overflow: hidden; margin-top: 16px; }
+.progress-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); border-radius: 20px; transition: width .4s; }
+
+/* Section groups */
+.section-group { margin-bottom: 14px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); box-shadow: var(--shadow); }
+.section-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; user-select: none; }
+.section-head:hover { background: var(--panel-2); }
+.section-head .chev { transition: transform .2s; color: var(--ink-faint); font-size: 12px; }
+.section-head.open .chev { transform: rotate(90deg); }
+.section-head .st { font-weight: 600; font-size: 15px; color: var(--ink); }
+.section-head .count { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+.section-body { border-top: 1px solid var(--line); }
+
+.lesson {
+  display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid rgba(42,47,57,.5);
+  cursor: pointer; transition: background .12s;
+}
+.lesson:last-child { border-bottom: none; }
+.lesson:hover { background: var(--panel-2); }
+.lesson .tick {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); flex: none;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; color: transparent;
+}
+.lesson .tick.done { background: var(--green); border-color: var(--green); color: #0c1410; }
+.lesson .l-title { font-size: 14px; color: var(--ink); }
+.lesson .l-meta { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.pill { font-size: 10px; padding: 3px 8px; border-radius: 20px; background: rgba(31,95,191,.14); color: var(--gold-soft); letter-spacing: .3px; }
+.pill.pdf { background: rgba(120,140,200,.16); color: #a9b7e0; }
+
+/* Player */
+.player-wrap { }
+.video-frame { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+.video-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.player-title { font-family: var(--serif); font-weight: 500; font-size: 26px; margin-top: 20px; }
+.player-desc { color: var(--ink-soft); margin-top: 8px; font-size: 14px; white-space: pre-wrap; }
+
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.mark-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 13px; font-weight: 500; }
+.mark-btn.done { background: rgba(76,175,125,.14); border-color: rgba(76,175,125,.4); color: #8fd6b1; }
+
+.resource-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel); margin-top: 12px; text-decoration: none; transition: border-color .15s, box-shadow .15s; box-shadow: var(--shadow); }
+.resource-card:hover { border-color: var(--gold); }
+.resource-card .ico { width: 40px; height: 40px; border-radius: 8px; background: rgba(120,140,200,.16);
+  display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none; }
+.resource-card .rn { font-size: 14px; font-weight: 600; }
+.resource-card .rs { font-size: 12px; color: var(--ink-faint); }
+
+.back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 13px;
+  background: none; border: none; margin-bottom: 18px; }
+.back-link:hover { color: var(--ink); }
+
+/* Empty states */
+.empty { text-align: center; padding: 60px 20px; color: var(--ink-faint); }
+.empty .big { font-family: var(--serif); font-size: 22px; color: var(--ink-soft); margin-bottom: 8px; }
+
+/* ── Admin ── */
+.admin-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 24px; flex-wrap: wrap; }
+.admin-tabs button { background: none; border: none; color: var(--ink-soft); padding: 12px 16px; font-size: 14px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.admin-tabs button.active { color: var(--gold-soft); border-bottom-color: var(--gold); }
+
+table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.grid th { text-align: left; color: var(--ink-faint); font-weight: 500; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+table.grid td { padding: 12px; border-bottom: 1px solid rgba(42,47,57,.5); vertical-align: middle; }
+.status-tag { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 600; }
+.s-pending { background: rgba(31,95,191,.15); color: var(--gold-soft); }
+.s-approved { background: rgba(76,175,125,.15); color: #8fd6b1; }
+.s-rejected, .s-suspended { background: rgba(209,96,96,.15); color: #e6a0a0; }
+
+.mini-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); font-size: 12px; margin-right: 6px; }
+.mini-btn:hover { border-color: var(--ink-faint); }
+.mini-btn.good:hover { border-color: var(--green); color: #8fd6b1; }
+.mini-btn.bad:hover { border-color: var(--red); color: #e6a0a0; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card h3 { font-family: var(--serif); font-weight: 500; font-size: 20px; margin-bottom: 4px; }
+.card .hint { font-size: 12px; color: var(--ink-faint); margin-bottom: 16px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 600px) { .row2 { grid-template-columns: 1fr; } }
+.field textarea { width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink);
+  padding: 12px 14px; border-radius: 9px; font-size: 14px; resize: vertical; min-height: 80px; }
+.field select { width: 100%; background: var(--bg-2); border: 1px solid var(--line); color: var(--ink);
+  padding: 12px 14px; border-radius: 9px; font-size: 14px; }
+
+.stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+@media (max-width: 700px) { .stat-row { grid-template-columns: 1fr 1fr; } }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+.stat .v { font-family: var(--serif); font-size: 32px; color: var(--gold-soft); }
+.stat .l { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+
+.admin-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 9px; background: var(--bg-2); margin-bottom: 8px; }
+.admin-item .drag { color: var(--ink-faint); cursor: grab; }
+.admin-item .ai-title { font-size: 14px; }
+.admin-item .ai-meta { font-size: 11px; color: var(--ink-faint); }
+.admin-item .sp { flex: 1; }
+
+.modal-back { position: fixed; inset: 0; background: rgba(6,8,11,.7); backdrop-filter: blur(3px); z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); width: 100%;
+  max-width: 520px; padding: 24px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.modal h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 8px; }
+.modal-actions .btn { width: auto; flex: 1; }
+
+.spinner { width: 20px; height: 20px; border: 2px solid rgba(31,95,191,.3); border-top-color: var(--gold);
+  border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.center-load { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+.overlay-menu { display: none; }
+@media (max-width: 980px) {
+  .overlay-menu.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 55; }
 }
 
-function StatsSummary({ stats }) {
-  return (
-    <div>
-      <div className="stat-row">
-        <div className="stat"><div className="v">{stats.trades || 0}</div><div className="l">Trades</div></div>
-        <div className="stat"><div className="v">{stats.winRate || 0}%</div><div className="l">Win rate</div></div>
-        <div className="stat"><div className="v" style={{ color: (stats.cumPct || 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{(stats.cumPct || 0) > 0 ? '+' : ''}{stats.cumPct || 0}%</div><div className="l">Cumulative %</div></div>
-        <div className="stat"><div className="v" style={{ color: (stats.cumAmt || 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{(stats.cumAmt || 0) > 0 ? '+' : ''}{stats.cumAmt || 0}</div><div className="l">Net P/L (R/$)</div></div>
-      </div>
-      <div className="stat-row">
-        <div className="stat"><div className="v" style={{ fontSize: 24 }}>1:{stats.avgRR || 0}</div><div className="l">Avg RR</div></div>
-        <div className="stat"><div className="v" style={{ fontSize: 24 }}>🔥 {stats.streak || 0}</div><div className="l">Day streak</div></div>
-        <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--green)' }}>{(stats.best || 0) > 0 ? '+' : ''}{stats.best || 0}%</div><div className="l">Best trade</div></div>
-        <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--red)' }}>{stats.worst || 0}%</div><div className="l">Worst trade</div></div>
-      </div>
-    </div>
-  );
-}
-
-function AnalyticsPanel({ stats, entries, onDay }) {
-  const topConf = Object.entries(stats.confluences || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  return (
-    <div>
-      {entries.length > 1 && <EquityCurve entries={entries} />}
-      <PnlCalendar entries={entries} onDay={onDay} />
-      <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
-      <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model']} />
-      {topConf.length > 0 && (
-        <div className="card">
-          <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Most-used confluences</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {topConf.map(([c, n]) => <span key={c} className="pill" style={{ fontSize: 12 }}>{c} · {n}</span>)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Breakdown({ title, data, order }) {
-  const rows = order.map((k) => [k, (data && data[k]) || { trades: 0, winRate: 0, cumPct: 0, cumAmt: 0, avgRR: 0 }]).filter(([, v]) => v.trades > 0);
-  if (rows.length === 0) return null;
-  // find best performer by cumPct for a subtle highlight
-  const best = rows.reduce((a, b) => (b[1].cumPct > a[1].cumPct ? b : a))[0];
-  return (
-    <div className="card">
-      <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>{title}</h3>
-      <div className="hint" style={{ marginBottom: 12 }}>Where your edge actually is — based on your logged trades.</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {rows.map(([k, v]) => {
-          const pos = v.cumPct >= 0;
-          const isBest = k === best && rows.length > 1;
-          return (
-            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, border: `1px solid ${isBest ? 'rgba(47,148,99,.4)' : 'var(--line)'}`, background: isBest ? 'rgba(47,148,99,.05)' : 'var(--bg-2)' }}>
-              <div style={{ minWidth: 90, fontWeight: 600, fontSize: 14 }}>{k}{isBest && <span title="Your strongest" style={{ marginLeft: 6 }}>⭐</span>}</div>
-              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, textAlign: 'center' }}>
-                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>{v.trades}</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Trades</div></div>
-                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>{v.winRate}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Win rate</div></div>
-                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{v.cumPct}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Net %</div></div>
-                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>1:{v.avgRR}</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Avg RR</div></div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function EquityCurve({ entries }) {
-  const [mode, setMode] = useState('pct'); // pct | amt
-  const sorted = [...entries].sort((a, b) => Number(a.trade_date) - Number(b.trade_date));
-  let cum = 0; const pts = sorted.map((e) => { cum += Number(mode === 'pct' ? e.pct : e.amount) || 0; return cum; });
-  const min = Math.min(0, ...pts), max = Math.max(0, ...pts); const range = max - min || 1;
-  const W = 600, H = 140, pad = 6;
-  const path = pts.map((y, i) => { const x = pts.length === 1 ? 0 : (i / (pts.length - 1)) * (W - pad * 2) + pad; const yy = H - pad - ((y - min) / range) * (H - pad * 2); return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${yy.toFixed(1)}`; }).join(' ');
-  const area = `${path} L${W - pad},${H} L${pad},${H} Z`;
-  const zeroY = H - pad - ((0 - min) / range) * (H - pad * 2);
-  const last = pts[pts.length - 1] || 0;
-  return (
-    <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <h3 style={{ fontSize: 16, margin: 0 }}>Equity curve</h3>
-        <span style={{ color: last >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{last > 0 ? '+' : ''}{last.toFixed(2)}{mode === 'pct' ? '%' : ''}</span>
-        <div style={{ flex: 1 }} />
-        <div className="admin-tabs" style={{ margin: 0, border: 'none' }}>
-          <button className={mode === 'pct' ? 'active' : ''} onClick={() => setMode('pct')} style={{ padding: '4px 10px', fontSize: 12 }}>%</button>
-          <button className={mode === 'amt' ? 'active' : ''} onClick={() => setMode('amt')} style={{ padding: '4px 10px', fontSize: 12 }}>R / $</button>
-        </div>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 140, marginTop: 10 }} preserveAspectRatio="none">
-        <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--gold)" stopOpacity="0.22" /><stop offset="100%" stopColor="var(--gold)" stopOpacity="0" /></linearGradient></defs>
-        <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke="var(--line)" strokeWidth="1" strokeDasharray="4 4" />
-        <path d={area} fill="url(#eqg)" stroke="none" />
-        <path d={path} fill="none" stroke="var(--gold)" strokeWidth="2" />
-      </svg>
-    </div>
-  );
-}
-
-function PnlCalendar({ entries, onDay }) {
-  const [ref, setRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
-  const byDay = useMemo(() => {
-    const map = {};
-    for (const e of entries) { const d = new Date(Number(e.trade_date)); if (d.getFullYear() === ref.y && d.getMonth() === ref.m) { const k = d.getDate(); (map[k] ||= { pct: 0, amt: 0, items: [] }); map[k].pct += Number(e.pct) || 0; map[k].amt += Number(e.amount) || 0; map[k].items.push(e); } }
-    return map;
-  }, [entries, ref]);
-  const first = new Date(ref.y, ref.m, 1).getDay();
-  const daysIn = new Date(ref.y, ref.m + 1, 0).getDate();
-  const cells = []; for (let i = 0; i < first; i++) cells.push(null); for (let d = 1; d <= daysIn; d++) cells.push(d);
-  const monthPct = Object.values(byDay).reduce((a, v) => a + v.pct, 0);
-  const prev = () => setRef((r) => { const m = r.m - 1; return m < 0 ? { y: r.y - 1, m: 11 } : { y: r.y, m }; });
-  const next = () => setRef((r) => { const m = r.m + 1; return m > 11 ? { y: r.y + 1, m: 0 } : { y: r.y, m }; });
-  return (
-    <div className="card">
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 16, margin: 0 }}>P&L calendar</h3>
-        <span style={{ marginLeft: 12, fontWeight: 700, color: monthPct >= 0 ? 'var(--green)' : 'var(--red)' }}>{monthPct > 0 ? '+' : ''}{monthPct.toFixed(2)}%</span>
-        <div style={{ flex: 1 }} />
-        <button className="mini-btn" onClick={prev}>‹</button>
-        <span style={{ fontFamily: 'var(--serif)', fontSize: 18, margin: '0 12px', minWidth: 120, textAlign: 'center' }}>{MONTHS[ref.m]} {ref.y}</span>
-        <button className="mini-btn" onClick={next}>›</button>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
-        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-faint)', paddingBottom: 4 }}>{d}</div>)}
-        {cells.map((d, i) => {
-          if (!d) return <div key={i} />;
-          const day = byDay[d];
-          const bg = !day ? 'transparent' : day.pct >= 0 ? 'rgba(47,148,99,.14)' : 'rgba(192,71,63,.14)';
-          const bd = !day ? 'var(--line)' : day.pct >= 0 ? 'rgba(47,148,99,.5)' : 'rgba(192,71,63,.5)';
-          return (
-            <div key={i} onClick={() => day && onDay(day.items[0])} style={{ aspectRatio: '1', borderRadius: 8, border: `1px solid ${bd}`, background: bg, padding: 6, cursor: day ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', minHeight: 52 }}>
-              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{d}</div>
-              {day && <div style={{ marginTop: 'auto', fontSize: 12, fontWeight: 700, color: day.pct >= 0 ? 'var(--green)' : 'var(--red)' }}>{day.pct > 0 ? '+' : ''}{day.pct.toFixed(1)}%</div>}
-              {day && <div style={{ fontSize: 9, color: 'var(--ink-faint)' }}>{day.items.length} trade{day.items.length > 1 ? 's' : ''}</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function EntryForm({ entry, confluences, onSave, onClose }) {
-  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', confluences: [], notes: '', images: [] });
-  const [uploading, setUploading] = useState(false);
-  const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
-  const toggleConf = (label) => { const has = (f.confluences || []).includes(label); setF({ ...f, confluences: has ? f.confluences.filter((c) => c !== label) : [...(f.confluences || []), label] }); };
-  async function addImages(ev) {
-    const files = Array.from(ev.target.files || []); if (!files.length) return;
-    setUploading(true);
-    try { const urls = []; for (const file of files) { const u = await uploadImage(file, 'journal'); urls.push(u); } setF((s) => ({ ...s, images: [...(s.images || []), ...urls] })); }
-    catch (e) { alert('Image upload failed. Try again.'); } finally { setUploading(false); }
-  }
-  const removeImage = (u) => setF({ ...f, images: (f.images || []).filter((x) => x !== u) });
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="serif">{entry ? 'Edit entry' : 'New journal entry'}</h3>
-        <div className="row2">
-          <div className="field"><label>Date</label><input type="date" value={dateStr} onChange={(e) => setF({ ...f, trade_date: new Date(e.target.value).getTime() })} /></div>
-          <div className="field"><label>Pair / Instrument</label><input value={f.pair} onChange={(e) => setF({ ...f, pair: e.target.value })} placeholder="e.g. XAUUSD" /></div>
-        </div>
-        <div className="row2">
-          <div className="field"><label>Direction</label><select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}><option value="long">Long</option><option value="short">Short</option></select></div>
-          <div className="field"><label>Result</label><select value={f.outcome} onChange={(e) => setF({ ...f, outcome: e.target.value })}><option value="win">Win</option><option value="loss">Loss</option><option value="breakeven">Breakeven</option></select></div>
-        </div>
-        <div className="row2">
-          <div className="field"><label>% gain / loss</label><input type="number" step="0.01" value={f.pct} onChange={(e) => setF({ ...f, pct: e.target.value })} placeholder="e.g. 1.5 or -0.8" /></div>
-          <div className="field"><label>R / $ amount</label><input type="number" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="e.g. 2 or 1000" /></div>
-        </div>
-        <div className="field"><label>Risk : Reward</label><input type="number" step="0.1" value={f.rr} onChange={(e) => setF({ ...f, rr: e.target.value })} placeholder="e.g. 2 for 1:2" /></div>
-        <div className="row2">
-          <div className="field"><label>Killzone / Session</label>
-            <select value={f.killzone} onChange={(e) => setF({ ...f, killzone: e.target.value })}>
-              <option value="">— Select —</option><option value="Asia">Asia</option><option value="London">London</option><option value="New York">New York</option>
-            </select>
-          </div>
-          <div className="field"><label>Model</label>
-            <select value={f.model} onChange={(e) => setF({ ...f, model: e.target.value })}>
-              <option value="">— Select —</option><option value="TA Model">TA Model</option><option value="Noctus Model">Noctus Model</option>
-            </select>
-          </div>
-        </div>
-        <div className="field">
-          <label>Confluences (TA Model)</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-            {(confluences || []).map((c) => { const on = (f.confluences || []).includes(c.label); return (
-              <button key={c.id} type="button" onClick={() => toggleConf(c.label)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>{c.label}</button>
-            ); })}
-          </div>
-        </div>
-        <div className="field"><label>Notes / reflection</label><textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="What did you see? What would you do differently?" /></div>
-        <div className="field">
-          <label>Screenshots ({(f.images || []).length})</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-            {(f.images || []).map((u) => (
-              <div key={u} style={{ position: 'relative' }}>
-                <img src={u} style={{ width: 68, height: 68, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />
-                <button type="button" onClick={() => removeImage(u)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 12 }}>×</button>
-              </div>
-            ))}
-          </div>
-          <label className="btn ghost" style={{ display: 'inline-block', width: 'auto', padding: '9px 16px', cursor: 'pointer' }}>
-            {uploading ? 'Uploading…' : '+ Add screenshots'}
-            <input type="file" accept="image/*" multiple onChange={addImages} style={{ display: 'none' }} disabled={uploading} />
-          </label>
-        </div>
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn" onClick={() => onSave(f)} disabled={!f.pair || f.pct === '' || uploading}>Save entry</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
-  const [comment, setComment] = useState(entry.admin_comment || '');
-  const [saving, setSaving] = useState(false);
-  const pos = Number(entry.pct) >= 0;
-  async function saveComment() {
-    setSaving(true);
-    try { await call('admin_comment_entry', { admin_id: adminId, entry_id: entry.id, comment }); entry.admin_comment = comment; onCommented && onCommented(); }
-    finally { setSaving(false); }
-  }
-  return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h3 className="serif" style={{ margin: 0 }}>{entry.pair}</h3>
-          <span className={`status-tag ${entry.outcome === 'win' ? 's-approved' : entry.outcome === 'loss' ? 's-rejected' : 's-pending'}`}>{entry.outcome}</span>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontWeight: 700, fontSize: 18, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{entry.pct}%</span>
-        </div>
-        <div style={{ display: 'flex', gap: 18, margin: '12px 0', fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
-          <span>{new Date(Number(entry.trade_date)).toLocaleDateString()}</span>
-          <span>{entry.direction === 'long' ? '▲ Long' : '▼ Short'}</span>
-          <span>RR 1:{entry.rr}</span>
-          <span>P/L {entry.amount}</span>
-          {entry.killzone && <span>🕐 {entry.killzone}</span>}
-          {entry.model && <span>📐 {entry.model}</span>}
-        </div>
-        {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
-        {entry.notes && <p style={{ fontSize: 14, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', marginBottom: 14 }}>{entry.notes}</p>}
-        {(entry.images || []).length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <ImageGallery images={entry.images} />
-          </div>
-        )}
-        {/* Mentor comment */}
-        {readOnly ? (
-          <div className="card" style={{ margin: 0, background: 'var(--bg-2)' }}>
-            <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 6 }}>Mentor comment (student will see this)</label>
-            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Leave feedback on this trade…" style={{ width: '100%', minHeight: 70 }} />
-            <button className="btn" style={{ marginTop: 8 }} onClick={saveComment} disabled={saving}>{saving ? 'Saving…' : 'Save comment'}</button>
-          </div>
-        ) : entry.admin_comment ? (
-          <div className="card" style={{ margin: 0, background: 'rgba(31,95,191,.06)', border: '1px solid rgba(31,95,191,.25)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginBottom: 4 }}>💬 Mentor feedback</div>
-            <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{entry.admin_comment}</div>
-          </div>
-        ) : null}
-        <div className="modal-actions" style={{ marginTop: 16 }}><button className="btn ghost" onClick={onClose}>Close</button></div>
-      </div>
-    </div>
-  );
-}
+/* Search box */
+.searchbox { position: relative; margin-bottom: 16px; max-width: 420px; }
+.searchbox input { width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  padding: 11px 14px 11px 38px; border-radius: 9px; font-size: 14px; }
+.searchbox input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(31,95,191,.12); }
+.searchbox .si { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-faint); font-size: 15px; pointer-events: none; }
+.searchbox .clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none;
+  color: var(--ink-faint); cursor: pointer; font-size: 16px; padding: 4px; }

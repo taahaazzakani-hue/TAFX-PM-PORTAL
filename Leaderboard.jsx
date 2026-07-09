@@ -1,54 +1,58 @@
-import React, { useEffect, useState } from 'react';
+// ── Backend configuration ───────────────────────────────────────────
+const SUPABASE_URL = 'https://sicegpbjpulqbomkrrtn.supabase.co';
+const ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpY2VncGJqcHVscWJvbWtycnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNjAzNzcsImV4cCI6MjA5ODczNjM3N30.gVcFzYWcBq_C8INPC7u7VIszFFuSR4dOZYbinrrLt5s';
 
-// A click-to-zoom image viewer. Renders thumbnails; clicking opens a full overlay.
-// Supports multiple images with prev/next, closes on backdrop click or Escape.
-export default function ImageGallery({ images, thumbStyle }) {
-  const [idx, setIdx] = useState(-1);
-  const open = idx >= 0;
+const API = `${SUPABASE_URL}/functions/v1/pm-api`;
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') setIdx(-1);
-      else if (e.key === 'ArrowRight') setIdx((i) => (i + 1) % images.length);
-      else if (e.key === 'ArrowLeft') setIdx((i) => (i - 1 + images.length) % images.length);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, images.length]);
+export async function call(action, body = {}) {
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${ANON_KEY}`,
+    },
+    body: JSON.stringify({ action, ...body }),
+  });
+  const data = await res.json().catch(() => ({ error: 'Network error' }));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
 
-  return (
-    <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>
-        {images.map((u, i) => (
-          <img key={u} src={u} onClick={() => setIdx(i)}
-            style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)', cursor: 'zoom-in', ...thumbStyle }} />
-        ))}
-      </div>
+const SKEY = 'ta_pm_session';
+export function saveSession(user) { localStorage.setItem(SKEY, JSON.stringify(user)); }
+export function loadSession() {
+  try { return JSON.parse(localStorage.getItem(SKEY)); } catch { return null; }
+}
+export function clearSession() { localStorage.removeItem(SKEY); }
 
-      {open && (
-        <div onClick={() => setIdx(-1)}
-          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(8,10,14,.9)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <button onClick={() => setIdx(-1)} aria-label="Close"
-            style={{ position: 'absolute', top: 18, right: 22, background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', width: 40, height: 40, borderRadius: '50%', fontSize: 22, cursor: 'pointer' }}>×</button>
+// Refresh current user from server (e.g. after level changes)
+export async function refreshMe(user_id) {
+  try { const d = await call('refresh_me', { user_id }); return d.user; } catch { return null; }
+}
 
-          {images.length > 1 && (
-            <button onClick={(e) => { e.stopPropagation(); setIdx((idx - 1 + images.length) % images.length); }} aria-label="Previous"
-              style={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', width: 44, height: 44, borderRadius: '50%', fontSize: 20, cursor: 'pointer' }}>‹</button>
-          )}
+// ── Supabase Storage upload (journal images, avatars) ──
+export async function uploadImage(file, folder = 'journal') {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/pm-journal/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ANON_KEY}`, 'Content-Type': file.type || 'image/jpeg', 'x-upsert': 'true' },
+    body: file,
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  return `${SUPABASE_URL}/storage/v1/object/public/pm-journal/${path}`;
+}
 
-          <img src={images[idx]} onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '92%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 60px rgba(0,0,0,.5)' }} />
-
-          {images.length > 1 && (
-            <>
-              <button onClick={(e) => { e.stopPropagation(); setIdx((idx + 1) % images.length); }} aria-label="Next"
-                style={{ position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.12)', color: '#fff', border: 'none', width: 44, height: 44, borderRadius: '50%', fontSize: 20, cursor: 'pointer' }}>›</button>
-              <div style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center', color: 'rgba(255,255,255,.7)', fontSize: 13 }}>{idx + 1} / {images.length}</div>
-            </>
-          )}
-        </div>
-      )}
-    </>
-  );
+// ── Generic file upload (PDFs, docs) to Supabase Storage ──
+export async function uploadFile(file, folder = 'lesson-pdfs') {
+  const safeName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${safeName}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/pm-journal/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ANON_KEY}`, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' },
+    body: file,
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  return `${SUPABASE_URL}/storage/v1/object/public/pm-journal/${path}`;
 }
