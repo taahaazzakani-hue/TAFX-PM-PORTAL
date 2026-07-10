@@ -1,245 +1,396 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { TEACH2 } from './assets.js';
+import { call, uploadImage } from './api.js';
+import SearchBox from './SearchBox.jsx';
+import ImageGallery from './ImageGallery.jsx';
 
-// Portal palette
-const BLUE = '#1f5fbf';
-const GOLD = '#1f5fbf';     // spec's "gold accent" mapped to portal blue
-const RED = '#c0473f';
-const GREEN = '#2f9463';
-const GREEN_DK = '#1A7A4A';
-const INK = '#131a24';
-const INK_SOFT = '#55606f';
-const INK_FAINT = '#909aa8';
-const LINE = '#dde4ee';
-const SERIF = "'Cormorant Garamond', Georgia, serif";
-const SHADOW = '0 1px 2px rgba(19,26,36,.04), 0 6px 20px rgba(19,26,36,.06)';
-const SHADOW_LG = '0 10px 40px rgba(19,26,36,.10)';
+const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const INSTRUMENTS = {
-  'NAS/US30': { multiplier: 1, label: 'NAS / US30', unit: 'index points', color: '#6B9FFF', icon: '📊' },
-  Gold: { multiplier: 100, label: 'Gold (XAUUSD)', unit: 'pips', color: '#E6C86A', icon: '🥇' },
-  Currency: { multiplier: 1, label: 'Currency Pairs', unit: 'pips', color: '#4CB880', icon: '💱', isCurrency: true },
-};
+export default function Journal({ user, confluences, readOnly = false, preloaded = null }) {
+  const myLevels = user.levels || [];
+  const [level, setLevel] = useState(myLevels[0] || 'beginner');
+  const [data, setData] = useState(preloaded);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [q, setQ] = useState('');
+  const [tab, setTab] = useState('journal');
 
-const fmt = (n) => (isFinite(n) ? n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00');
-const money = (n, cur) => (cur === 'USD' ? '$' : 'R') + fmt(n);
-
-export default function RiskCalculator() {
-  const [instrument, setInstrument] = useState('NAS/US30');
-  const [accountSize, setAccountSize] = useState('10000');
-  const [rate, setRate] = useState('18.50');
-  const [rateStatus, setRateStatus] = useState('loading');
-  const [riskPts, setRiskPts] = useState('');
-  const [riskLots, setRiskLots] = useState('');
-  const [profitPts, setProfitPts] = useState('');
-  const [profitLots, setProfitLots] = useState('');
-  const [focus, setFocus] = useState(null);
-
-  const isFunded = false;
-  const inst = INSTRUMENTS[instrument];
-  const curr = isFunded ? 'USD' : 'ZAR';
-
-  useEffect(() => {
-    let done = false;
-    (async () => {
-      setRateStatus('loading');
-      try {
-        const r = await fetch('https://open.er-api.com/v6/latest/USD');
-        const d = await r.json();
-        if (d?.rates?.ZAR) { if (!done) { setRate(Number(d.rates.ZAR).toFixed(2)); setRateStatus('ok'); } return; }
-        throw new Error('no rate');
-      } catch {
-        try {
-          const r2 = await fetch('https://api.frankfurter.app/latest?from=USD&to=ZAR');
-          const d2 = await r2.json();
-          if (d2?.rates?.ZAR) { if (!done) { setRate(Number(d2.rates.ZAR).toFixed(2)); setRateStatus('ok'); } return; }
-          throw new Error('no rate');
-        } catch { if (!done) setRateStatus('error'); }
-      }
-    })();
-    return () => { done = true; };
-  }, []);
-
-  const calc = useMemo(() => {
-    const rP = parseFloat(riskPts) || 0, rL = parseFloat(riskLots) || 0;
-    const prP = parseFloat(profitPts) || 0, prL = parseFloat(profitLots) || 0;
-    const acc = parseFloat(accountSize) || 0;
-    const rt = parseFloat(rate) || 18.5;
-    const mult = inst.isCurrency ? 1 : inst.multiplier;
-    const riskUSD = inst.isCurrency ? rP * rL : rP * rL * mult;
-    const profitUSD = inst.isCurrency ? prP * prL : prP * prL * mult;
-    const riskZAR = riskUSD * rt, profitZAR = profitUSD * rt;
-    const riskAmt = isFunded ? riskUSD : riskZAR;
-    const profitAmt = isFunded ? profitUSD : profitZAR;
-    const riskPct = acc ? (riskAmt / acc) * 100 : 0;
-    const profitPct = acc ? (profitAmt / acc) * 100 : 0;
-    const rr = riskZAR ? profitZAR / riskZAR : null;
-    return { rP, rL, prP, prL, acc, riskUSD, profitUSD, riskZAR, profitZAR, riskAmt, profitAmt, riskPct, profitPct, rr };
-  }, [riskPts, riskLots, profitPts, profitLots, accountSize, rate, instrument, isFunded, inst]);
-
-  const riskColor = (pct) => {
-    if (isFunded) return pct > 1.5 ? RED : pct > 1 ? GOLD : GREEN;
-    return pct > 10 ? RED : pct > 5 ? GOLD : GREEN;
+  const load = () => {
+    if (readOnly) { call('admin_journal_entries', { admin_id: user.adminId, user_id: user.id }).then(setData); }
+    else call('journal_list', { user_id: user.id }).then(setData);
   };
+  useEffect(() => { if (!preloaded) load(); }, []);
 
-  const warnings = [];
-  if (!isFunded && calc.riskPct > 10) warnings.push({ c: RED, t: '⚠️ You are risking more than 10% of your HFM account. Reduce your lot size.' });
-  else if (!isFunded && calc.riskPct > 5) warnings.push({ c: GOLD, t: '⚡ Risk is above 5% — be cautious with your HFM account.' });
-  if (isFunded && calc.riskPct > 1.5) warnings.push({ c: RED, t: '🚨 DANGER — Over 1.5% risk on a funded account. You risk breaching your drawdown rules.' });
-  else if (isFunded && calc.riskPct > 1) warnings.push({ c: GOLD, t: '⚡ Approaching 1.5% funded account risk limit. Consider reducing size.' });
-  if (calc.rr !== null && calc.rr > 0 && calc.rr < 1.5) warnings.push({ c: GOLD, t: '⚡ Risk:Reward is below 1:1.5. Look for a better setup.' });
+  if (!myLevels.length && !readOnly) return <div className="empty"><div className="big serif">No level access yet</div><div>Your mentor hasn't assigned you a stage. Once they do, your journal unlocks.</div></div>;
+  if (!data) return <div className="spinner" />;
 
-  // ── shared style atoms ──
-  const cardBase = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: SHADOW };
-  const labelSt = { fontSize: 11, letterSpacing: '.4px', textTransform: 'uppercase', color: INK_FAINT, marginBottom: 7, display: 'block', fontWeight: 600 };
-  const inputWrap = (id) => ({
-    width: '100%', boxSizing: 'border-box', background: '#f6f8fb',
-    border: `1.5px solid ${focus === id ? BLUE : LINE}`, borderRadius: 11, padding: '13px 15px',
-    fontSize: 19, color: INK, fontFamily: SERIF, fontWeight: 600, outline: 'none',
-    boxShadow: focus === id ? `0 0 0 4px ${BLUE}14` : 'none', transition: 'border-color .15s, box-shadow .15s',
-  });
-  const inputProps = (id) => ({ style: inputWrap(id), onFocus: () => setFocus(id), onBlur: () => setFocus(null) });
+  const levelsToShow = readOnly ? ['beginner', 'intermediate', 'advanced'] : myLevels;
+  const entries = data.entries.filter((e) => e.level === level);
+  const stats = data.stats[level] || {};
+  const ql = q.trim().toLowerCase();
+  const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
 
-  const ResultRow = ({ l, v, color, strong }) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '9px 0', borderBottom: `1px solid ${LINE}` }}>
-      <span style={{ fontSize: 13, color: INK_SOFT }}>{l}</span>
-      <span style={{ fontFamily: SERIF, fontSize: strong ? 22 : 18, fontWeight: 600, color: color || INK }}>{v}</span>
-    </div>
-  );
-
-  const showRisk = calc.riskAmt > 0;
-  const showProfit = calc.profitAmt > 0;
+  async function saveEntry(entry) {
+    await call('journal_save', { user_id: user.id, entry: { ...entry, level } });
+    setShowForm(false); setEditing(null); load();
+  }
+  async function delEntry(id) {
+    if (!confirm('Delete this journal entry?')) return;
+    await call('journal_delete', { user_id: user.id, entry_id: id }); load();
+  }
 
   return (
-    <div style={{ maxWidth: 940, fontFamily: "'Inter', sans-serif" }}>
-      {/* ── Hero header ── */}
-      <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', marginBottom: 24, boxShadow: SHADOW, minHeight: 150 }}>
-        <img src={TEACH2} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.32 }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(115deg, rgba(255,255,255,.97), rgba(255,255,255,.72))' }} />
-        <div style={{ position: 'relative', padding: '30px 32px' }}>
-          <div style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: GOLD, fontWeight: 700 }}>TA FX · Position Sizing</div>
-          <h1 style={{ fontFamily: SERIF, fontSize: 40, fontWeight: 500, margin: '6px 0 6px', letterSpacing: '.3px' }}>Risk Calculator</h1>
-          <p style={{ color: INK_SOFT, fontSize: 14, margin: 0, maxWidth: 460 }}>Calculate your risk and reward before entering a trade. Size every position with intent.</p>
-        </div>
+    <div>
+      <div className="admin-tabs">
+        {levelsToShow.map((lv) => (<button key={lv} className={level === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
       </div>
 
-      {/* ── Setup panel: account + instrument + size/rate ── */}
-      <div style={{ ...cardBase, padding: 22, marginBottom: 18 }}>
-        {/* HFM account badge */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: '#6B9FFF14', border: `1px solid #6B9FFF44`, marginBottom: 20 }}>
-          <span style={{ fontSize: 16 }}>🏦</span>
-          <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>HFM Account</span>
-          <span style={{ fontSize: 12, color: INK_SOFT }}>· Max 10% risk</span>
-        </div>
-
-        {/* instrument */}
-        <label style={labelSt}>Instrument</label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-          {Object.entries(INSTRUMENTS).map(([k, v]) => {
-            const on = instrument === k;
-            return (
-              <button key={k} onClick={() => setInstrument(k)} style={{
-                cursor: 'pointer', padding: '16px 10px', borderRadius: 13, textAlign: 'center',
-                border: `1.5px solid ${on ? v.color : LINE}`, background: on ? v.color + '16' : '#fff',
-                boxShadow: on ? `0 4px 16px ${v.color}33` : 'none', transition: 'all .15s',
-              }}>
-                <div style={{ fontSize: 26 }}>{v.icon}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginTop: 6 }}>{v.label}</div>
-                <div style={{ fontSize: 10, color: INK_FAINT, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.4px' }}>{v.unit}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* account size + rate */}
-        <div style={{ display: 'grid', gridTemplateColumns: isFunded ? '1fr' : '1fr 1fr', gap: 14 }}>
-          <div>
-            <label style={labelSt}>Account Size · <span style={{ color: BLUE }}>{curr}</span></label>
-            <input {...inputProps('acc')} type="number" value={accountSize} onChange={(e) => setAccountSize(e.target.value)} />
-          </div>
-          {!isFunded && (
-            <div>
-              <label style={{ ...labelSt, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
-                <span style={{ textTransform: 'uppercase', letterSpacing: '.4px' }}>USD / ZAR Rate</span>
-                <span style={{ fontWeight: 500, color: rateStatus === 'ok' ? GREEN : rateStatus === 'loading' ? INK_FAINT : RED }}>
-                  {rateStatus === 'loading' ? '⟳ Fetching live rate…' : rateStatus === 'ok' ? '✓ Live rate' : '⚠ Manual entry'}
-                </span>
-              </label>
-              <input {...inputProps('rate')} type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
-            </div>
-          )}
-        </div>
+      {/* Journal / Analytics sub-tabs */}
+      <div style={{ display: 'flex', gap: 8, margin: '4px 0 20px', borderBottom: '1px solid var(--line)' }}>
+        {[['journal', '📓 Journal'], ['analytics', '📊 Analytics']].map(([k, lbl]) => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', marginBottom: -1, fontSize: 14, fontWeight: 600,
+            color: tab === k ? 'var(--gold)' : 'var(--ink-soft)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
+          }}>{lbl}</button>
+        ))}
       </div>
 
-      {/* ── Risk + Profit ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
-        {/* Risk */}
-        <div style={{ ...cardBase, padding: 22, borderTop: `3px solid ${RED}`, background: 'linear-gradient(180deg, ' + RED + '06, #fff 40%)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: RED, marginBottom: 16, fontSize: 15 }}>
-            <span style={{ width: 26, height: 26, borderRadius: 8, background: RED + '18', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>🛑</span>
-            Risk / Stop Loss
-          </div>
-          <label style={labelSt}>Risk ({inst.unit})</label>
-          <input {...inputProps('rp')} type="number" value={riskPts} onChange={(e) => setRiskPts(e.target.value)} />
-          <div style={{ height: 12 }} />
-          <label style={labelSt}>Lot Size</label>
-          <input {...inputProps('rl')} type="number" value={riskLots} onChange={(e) => setRiskLots(e.target.value)} />
-          {showRisk && (
-            <div style={{ marginTop: 16 }}>
-              <ResultRow l="Risk (USD)" v={money(calc.riskUSD, 'USD')} />
-              {!isFunded && <ResultRow l="Risk (ZAR)" v={money(calc.riskZAR, 'ZAR')} />}
-              <ResultRow l="% of Account" v={calc.riskPct.toFixed(2) + '%'} color={riskColor(calc.riskPct)} strong />
-              <ResultRow l="Balance After SL" v={money(calc.acc - calc.riskAmt, curr)} />
-            </div>
-          )}
-        </div>
+      {tab === 'journal' ? (
+        <>
+          <StatsSummary stats={stats} />
 
-        {/* Profit */}
-        <div style={{ ...cardBase, padding: 22, borderTop: `3px solid ${GREEN}`, background: 'linear-gradient(180deg, ' + GREEN + '06, #fff 40%)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: GREEN_DK, marginBottom: 16, fontSize: 15 }}>
-            <span style={{ width: 26, height: 26, borderRadius: 8, background: GREEN + '18', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>✅</span>
-            Profit / Take Profit
+          <div style={{ display: 'flex', alignItems: 'center', margin: '22px 0 14px' }}>
+            <h3 className="serif" style={{ fontSize: 22, fontWeight: 500 }}>Trade log</h3>
+            <div style={{ flex: 1 }} />
+            {!readOnly && <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => { setEditing(null); setShowForm(true); }}>+ New entry</button>}
           </div>
-          <label style={labelSt}>Profit ({inst.unit})</label>
-          <input {...inputProps('pp')} type="number" value={profitPts} onChange={(e) => setProfitPts(e.target.value)} />
-          <div style={{ height: 12 }} />
-          <label style={labelSt}>Lot Size</label>
-          <input {...inputProps('pl')} type="number" value={profitLots} onChange={(e) => setProfitLots(e.target.value)} />
-          {showProfit && (
-            <div style={{ marginTop: 16 }}>
-              <ResultRow l="Profit (USD)" v={money(calc.profitUSD, 'USD')} />
-              {!isFunded && <ResultRow l="Profit (ZAR)" v={money(calc.profitZAR, 'ZAR')} />}
-              <ResultRow l="% of Account" v={calc.profitPct.toFixed(2) + '%'} color={GREEN} strong />
-              <ResultRow l="Balance After TP" v={money(calc.acc + calc.profitAmt, curr)} />
+
+          {entries.length > 0 && <SearchBox value={q} onChange={setQ} placeholder="Search pair, confluence, note or result…" />}
+
+          {entries.length === 0 ? (
+            <div className="empty"><div className="big serif">No trades logged{readOnly ? '' : ' yet'}</div>{!readOnly && <div>Add your first entry to start building your stats.</div>}</div>
+          ) : logEntries.length === 0 ? (
+            <div className="empty"><div>No trades match your search.</div></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {logEntries.map((e) => (
+                <TradeRow key={e.id} e={e} readOnly={readOnly} onOpen={() => setDetail(e)} onEdit={() => { setEditing(e); setShowForm(true); }} onDel={() => delEntry(e.id)} />
+              ))}
             </div>
           )}
+        </>
+      ) : (
+        entries.length === 0 ? (
+          <div className="empty"><div className="big serif">No data yet</div><div>Log some trades and your analytics will appear here.</div></div>
+        ) : (
+          <AnalyticsPanel stats={stats} entries={entries} onDay={(e) => setDetail(e)} />
+        )
+      )}
+
+      {showForm && <EntryForm entry={editing} confluences={confluences} onSave={saveEntry} onClose={() => { setShowForm(false); setEditing(null); }} />}
+      {detail && <EntryDetail entry={detail} readOnly={readOnly} adminId={readOnly ? user.adminId : null} onClose={() => setDetail(null)} onCommented={load} />}
+    </div>
+  );
+}
+
+function TradeRow({ e, readOnly, onOpen, onEdit, onDel }) {
+  const pos = Number(e.pct) >= 0;
+  return (
+    <div className="card" style={{ margin: 0, padding: '14px 16px', cursor: 'pointer' }} onClick={onOpen}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ width: 44, textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{MONTHS[new Date(Number(e.trade_date)).getMonth()]}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--serif)' }}>{new Date(Number(e.trade_date)).getDate()}</div>
         </div>
+        <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600 }}>{e.pair} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-faint)' }}>{e.direction === 'long' ? '▲ Long' : '▼ Short'}</span></div>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{(e.confluences || []).join(' · ') || '—'}</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>📷 {(e.images || []).length}</span>}
+        {e.admin_comment && <span title="Mentor comment" style={{ fontSize: 14 }}>💬</span>}
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>1:{e.rr} · {Number(e.amount) >= 0 ? '+' : ''}{e.amount}</div>
+        </div>
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: 4 }} onClick={(ev) => ev.stopPropagation()}>
+            <button className="mini-btn" onClick={onEdit}>Edit</button>
+            <button className="mini-btn bad" onClick={onDel}>Del</button>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
 
-      {/* ── R:R summary ── */}
-      {showRisk && showProfit && (
-        <div style={{ ...cardBase, padding: 26, boxShadow: SHADOW_LG, background: 'linear-gradient(135deg, ' + BLUE + '08, #fff 55%)', borderColor: BLUE + '33' }}>
-          <div style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: BLUE, fontWeight: 700, marginBottom: 16, textAlign: 'center' }}>Trade Summary</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
-            {[
-              { l: 'Risk : Reward', v: calc.rr !== null ? `1 : ${calc.rr.toFixed(2)}` : '—', c: calc.rr >= 2 ? GREEN : calc.rr >= 1 ? GOLD : RED },
-              { l: 'Total Risk', v: money(calc.riskAmt, curr), c: RED },
-              { l: 'Total Profit', v: money(calc.profitAmt, curr), c: GREEN_DK },
-              { l: 'Account Risk %', v: calc.riskPct.toFixed(2) + '%', c: riskColor(calc.riskPct) },
-            ].map((s, i) => (
-              <div key={s.l} style={{ textAlign: 'center', borderLeft: i > 0 ? `1px solid ${LINE}` : 'none' }}>
-                <div style={{ fontFamily: SERIF, fontSize: 30, fontWeight: 600, color: s.c, lineHeight: 1.1 }}>{s.v}</div>
-                <div style={{ fontSize: 11, color: INK_FAINT, marginTop: 5, textTransform: 'uppercase', letterSpacing: '.4px' }}>{s.l}</div>
-              </div>
-            ))}
+function StatsSummary({ stats }) {
+  return (
+    <div>
+      <div className="stat-row">
+        <div className="stat"><div className="v">{stats.trades || 0}</div><div className="l">Trades</div></div>
+        <div className="stat"><div className="v">{stats.winRate || 0}%</div><div className="l">Win rate</div></div>
+        <div className="stat"><div className="v" style={{ color: (stats.cumPct || 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{(stats.cumPct || 0) > 0 ? '+' : ''}{stats.cumPct || 0}%</div><div className="l">Cumulative %</div></div>
+        <div className="stat"><div className="v" style={{ color: (stats.cumAmt || 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{(stats.cumAmt || 0) > 0 ? '+' : ''}{stats.cumAmt || 0}</div><div className="l">Net P/L (R/$)</div></div>
+      </div>
+      <div className="stat-row">
+        <div className="stat"><div className="v" style={{ fontSize: 24 }}>1:{stats.avgRR || 0}</div><div className="l">Avg RR</div></div>
+        <div className="stat"><div className="v" style={{ fontSize: 24 }}>🔥 {stats.streak || 0}</div><div className="l">Day streak</div></div>
+        <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--green)' }}>{(stats.best || 0) > 0 ? '+' : ''}{stats.best || 0}%</div><div className="l">Best trade</div></div>
+        <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--red)' }}>{stats.worst || 0}%</div><div className="l">Worst trade</div></div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsPanel({ stats, entries, onDay }) {
+  const topConf = Object.entries(stats.confluences || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  return (
+    <div>
+      {entries.length > 1 && <EquityCurve entries={entries} />}
+      <PnlCalendar entries={entries} onDay={onDay} />
+      <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
+      <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model']} />
+      {topConf.length > 0 && (
+        <div className="card">
+          <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Most-used confluences</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {topConf.map(([c, n]) => <span key={c} className="pill" style={{ fontSize: 12 }}>{c} · {n}</span>)}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* ── Warnings ── */}
-      {warnings.map((w, i) => (
-        <div key={i} style={{ marginTop: 14, padding: '14px 18px', borderRadius: 12, background: w.c + '10', border: `1px solid ${w.c}44`, color: w.c, fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>{w.t}</div>
-      ))}
+function Breakdown({ title, data, order }) {
+  const rows = order.map((k) => [k, (data && data[k]) || { trades: 0, winRate: 0, cumPct: 0, cumAmt: 0, avgRR: 0 }]).filter(([, v]) => v.trades > 0);
+  if (rows.length === 0) return null;
+  // find best performer by cumPct for a subtle highlight
+  const best = rows.reduce((a, b) => (b[1].cumPct > a[1].cumPct ? b : a))[0];
+  return (
+    <div className="card">
+      <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>{title}</h3>
+      <div className="hint" style={{ marginBottom: 12 }}>Where your edge actually is — based on your logged trades.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map(([k, v]) => {
+          const pos = v.cumPct >= 0;
+          const isBest = k === best && rows.length > 1;
+          return (
+            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10, border: `1px solid ${isBest ? 'rgba(47,148,99,.4)' : 'var(--line)'}`, background: isBest ? 'rgba(47,148,99,.05)' : 'var(--bg-2)' }}>
+              <div style={{ minWidth: 90, fontWeight: 600, fontSize: 14 }}>{k}{isBest && <span title="Your strongest" style={{ marginLeft: 6 }}>⭐</span>}</div>
+              <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, textAlign: 'center' }}>
+                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>{v.trades}</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Trades</div></div>
+                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>{v.winRate}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Win rate</div></div>
+                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{v.cumPct}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Net %</div></div>
+                <div><div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 600 }}>1:{v.avgRR}</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>Avg RR</div></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EquityCurve({ entries }) {
+  const [mode, setMode] = useState('pct'); // pct | amt
+  const sorted = [...entries].sort((a, b) => Number(a.trade_date) - Number(b.trade_date));
+  let cum = 0; const pts = sorted.map((e) => { cum += Number(mode === 'pct' ? e.pct : e.amount) || 0; return cum; });
+  const min = Math.min(0, ...pts), max = Math.max(0, ...pts); const range = max - min || 1;
+  const W = 600, H = 140, pad = 6;
+  const path = pts.map((y, i) => { const x = pts.length === 1 ? 0 : (i / (pts.length - 1)) * (W - pad * 2) + pad; const yy = H - pad - ((y - min) / range) * (H - pad * 2); return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${yy.toFixed(1)}`; }).join(' ');
+  const area = `${path} L${W - pad},${H} L${pad},${H} Z`;
+  const zeroY = H - pad - ((0 - min) / range) * (H - pad * 2);
+  const last = pts[pts.length - 1] || 0;
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <h3 style={{ fontSize: 16, margin: 0 }}>Equity curve</h3>
+        <span style={{ color: last >= 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{last > 0 ? '+' : ''}{last.toFixed(2)}{mode === 'pct' ? '%' : ''}</span>
+        <div style={{ flex: 1 }} />
+        <div className="admin-tabs" style={{ margin: 0, border: 'none' }}>
+          <button className={mode === 'pct' ? 'active' : ''} onClick={() => setMode('pct')} style={{ padding: '4px 10px', fontSize: 12 }}>%</button>
+          <button className={mode === 'amt' ? 'active' : ''} onClick={() => setMode('amt')} style={{ padding: '4px 10px', fontSize: 12 }}>R / $</button>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 140, marginTop: 10 }} preserveAspectRatio="none">
+        <defs><linearGradient id="eqg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--gold)" stopOpacity="0.22" /><stop offset="100%" stopColor="var(--gold)" stopOpacity="0" /></linearGradient></defs>
+        <line x1="0" y1={zeroY} x2={W} y2={zeroY} stroke="var(--line)" strokeWidth="1" strokeDasharray="4 4" />
+        <path d={area} fill="url(#eqg)" stroke="none" />
+        <path d={path} fill="none" stroke="var(--gold)" strokeWidth="2" />
+      </svg>
+    </div>
+  );
+}
+
+function PnlCalendar({ entries, onDay }) {
+  const [ref, setRef] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const byDay = useMemo(() => {
+    const map = {};
+    for (const e of entries) { const d = new Date(Number(e.trade_date)); if (d.getFullYear() === ref.y && d.getMonth() === ref.m) { const k = d.getDate(); (map[k] ||= { pct: 0, amt: 0, items: [] }); map[k].pct += Number(e.pct) || 0; map[k].amt += Number(e.amount) || 0; map[k].items.push(e); } }
+    return map;
+  }, [entries, ref]);
+  const first = new Date(ref.y, ref.m, 1).getDay();
+  const daysIn = new Date(ref.y, ref.m + 1, 0).getDate();
+  const cells = []; for (let i = 0; i < first; i++) cells.push(null); for (let d = 1; d <= daysIn; d++) cells.push(d);
+  const monthPct = Object.values(byDay).reduce((a, v) => a + v.pct, 0);
+  const prev = () => setRef((r) => { const m = r.m - 1; return m < 0 ? { y: r.y - 1, m: 11 } : { y: r.y, m }; });
+  const next = () => setRef((r) => { const m = r.m + 1; return m > 11 ? { y: r.y + 1, m: 0 } : { y: r.y, m }; });
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
+        <h3 style={{ fontSize: 16, margin: 0 }}>P&L calendar</h3>
+        <span style={{ marginLeft: 12, fontWeight: 700, color: monthPct >= 0 ? 'var(--green)' : 'var(--red)' }}>{monthPct > 0 ? '+' : ''}{monthPct.toFixed(2)}%</span>
+        <div style={{ flex: 1 }} />
+        <button className="mini-btn" onClick={prev}>‹</button>
+        <span style={{ fontFamily: 'var(--serif)', fontSize: 18, margin: '0 12px', minWidth: 120, textAlign: 'center' }}>{MONTHS[ref.m]} {ref.y}</span>
+        <button className="mini-btn" onClick={next}>›</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
+        {['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-faint)', paddingBottom: 4 }}>{d}</div>)}
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const day = byDay[d];
+          const bg = !day ? 'transparent' : day.pct >= 0 ? 'rgba(47,148,99,.14)' : 'rgba(192,71,63,.14)';
+          const bd = !day ? 'var(--line)' : day.pct >= 0 ? 'rgba(47,148,99,.5)' : 'rgba(192,71,63,.5)';
+          return (
+            <div key={i} onClick={() => day && onDay(day.items[0])} style={{ aspectRatio: '1', borderRadius: 8, border: `1px solid ${bd}`, background: bg, padding: 6, cursor: day ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', minHeight: 52 }}>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{d}</div>
+              {day && <div style={{ marginTop: 'auto', fontSize: 12, fontWeight: 700, color: day.pct >= 0 ? 'var(--green)' : 'var(--red)' }}>{day.pct > 0 ? '+' : ''}{day.pct.toFixed(1)}%</div>}
+              {day && <div style={{ fontSize: 9, color: 'var(--ink-faint)' }}>{day.items.length} trade{day.items.length > 1 ? 's' : ''}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EntryForm({ entry, confluences, onSave, onClose }) {
+  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', confluences: [], notes: '', images: [] });
+  const [uploading, setUploading] = useState(false);
+  const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
+  const toggleConf = (label) => { const has = (f.confluences || []).includes(label); setF({ ...f, confluences: has ? f.confluences.filter((c) => c !== label) : [...(f.confluences || []), label] }); };
+  async function addImages(ev) {
+    const files = Array.from(ev.target.files || []); if (!files.length) return;
+    setUploading(true);
+    try { const urls = []; for (const file of files) { const u = await uploadImage(file, 'journal'); urls.push(u); } setF((s) => ({ ...s, images: [...(s.images || []), ...urls] })); }
+    catch (e) { alert('Image upload failed. Try again.'); } finally { setUploading(false); }
+  }
+  const removeImage = (u) => setF({ ...f, images: (f.images || []).filter((x) => x !== u) });
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="serif">{entry ? 'Edit entry' : 'New journal entry'}</h3>
+        <div className="row2">
+          <div className="field"><label>Date</label><input type="date" value={dateStr} onChange={(e) => setF({ ...f, trade_date: new Date(e.target.value).getTime() })} /></div>
+          <div className="field"><label>Pair / Instrument</label><input value={f.pair} onChange={(e) => setF({ ...f, pair: e.target.value })} placeholder="e.g. XAUUSD" /></div>
+        </div>
+        <div className="row2">
+          <div className="field"><label>Direction</label><select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}><option value="long">Long</option><option value="short">Short</option></select></div>
+          <div className="field"><label>Result</label><select value={f.outcome} onChange={(e) => setF({ ...f, outcome: e.target.value })}><option value="win">Win</option><option value="loss">Loss</option><option value="breakeven">Breakeven</option></select></div>
+        </div>
+        <div className="row2">
+          <div className="field"><label>% gain / loss</label><input type="number" step="0.01" value={f.pct} onChange={(e) => setF({ ...f, pct: e.target.value })} placeholder="e.g. 1.5 or -0.8" /></div>
+          <div className="field"><label>R / $ amount</label><input type="number" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="e.g. 2 or 1000" /></div>
+        </div>
+        <div className="field"><label>Risk : Reward</label><input type="number" step="0.1" value={f.rr} onChange={(e) => setF({ ...f, rr: e.target.value })} placeholder="e.g. 2 for 1:2" /></div>
+        <div className="row2">
+          <div className="field"><label>Killzone / Session</label>
+            <select value={f.killzone} onChange={(e) => setF({ ...f, killzone: e.target.value })}>
+              <option value="">— Select —</option><option value="Asia">Asia</option><option value="London">London</option><option value="New York">New York</option>
+            </select>
+          </div>
+          <div className="field"><label>Model</label>
+            <select value={f.model} onChange={(e) => setF({ ...f, model: e.target.value })}>
+              <option value="">— Select —</option><option value="TA Model">TA Model</option><option value="Noctus Model">Noctus Model</option>
+            </select>
+          </div>
+        </div>
+        <div className="field">
+          <label>Confluences (TA Model)</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+            {(confluences || []).map((c) => { const on = (f.confluences || []).includes(c.label); return (
+              <button key={c.id} type="button" onClick={() => toggleConf(c.label)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>{c.label}</button>
+            ); })}
+          </div>
+        </div>
+        <div className="field"><label>Notes / reflection</label><textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="What did you see? What would you do differently?" /></div>
+        <div className="field">
+          <label>Screenshots ({(f.images || []).length})</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {(f.images || []).map((u) => (
+              <div key={u} style={{ position: 'relative' }}>
+                <img src={u} style={{ width: 68, height: 68, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />
+                <button type="button" onClick={() => removeImage(u)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 12 }}>×</button>
+              </div>
+            ))}
+          </div>
+          <label className="btn ghost" style={{ display: 'inline-block', width: 'auto', padding: '9px 16px', cursor: 'pointer' }}>
+            {uploading ? 'Uploading…' : '+ Add screenshots'}
+            <input type="file" accept="image/*" multiple onChange={addImages} style={{ display: 'none' }} disabled={uploading} />
+          </label>
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={onClose}>Cancel</button>
+          <button className="btn" onClick={() => onSave(f)} disabled={!f.pair || f.pct === '' || uploading}>Save entry</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
+  const [comment, setComment] = useState(entry.admin_comment || '');
+  const [saving, setSaving] = useState(false);
+  const pos = Number(entry.pct) >= 0;
+  async function saveComment() {
+    setSaving(true);
+    try { await call('admin_comment_entry', { admin_id: adminId, entry_id: entry.id, comment }); entry.admin_comment = comment; onCommented && onCommented(); }
+    finally { setSaving(false); }
+  }
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h3 className="serif" style={{ margin: 0 }}>{entry.pair}</h3>
+          <span className={`status-tag ${entry.outcome === 'win' ? 's-approved' : entry.outcome === 'loss' ? 's-rejected' : 's-pending'}`}>{entry.outcome}</span>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontWeight: 700, fontSize: 18, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{entry.pct}%</span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, margin: '12px 0', fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
+          <span>{new Date(Number(entry.trade_date)).toLocaleDateString()}</span>
+          <span>{entry.direction === 'long' ? '▲ Long' : '▼ Short'}</span>
+          <span>RR 1:{entry.rr}</span>
+          <span>P/L {entry.amount}</span>
+          {entry.killzone && <span>🕐 {entry.killzone}</span>}
+          {entry.model && <span>📐 {entry.model}</span>}
+        </div>
+        {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
+        {entry.notes && <p style={{ fontSize: 14, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', marginBottom: 14 }}>{entry.notes}</p>}
+        {(entry.images || []).length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <ImageGallery images={entry.images} />
+          </div>
+        )}
+        {/* Mentor comment */}
+        {readOnly ? (
+          <div className="card" style={{ margin: 0, background: 'var(--bg-2)' }}>
+            <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 6 }}>Mentor comment (student will see this)</label>
+            <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Leave feedback on this trade…" style={{ width: '100%', minHeight: 70 }} />
+            <button className="btn" style={{ marginTop: 8 }} onClick={saveComment} disabled={saving}>{saving ? 'Saving…' : 'Save comment'}</button>
+          </div>
+        ) : entry.admin_comment ? (
+          <div className="card" style={{ margin: 0, background: 'rgba(31,95,191,.06)', border: '1px solid rgba(31,95,191,.25)' }}>
+            <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginBottom: 4 }}>💬 Mentor feedback</div>
+            <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{entry.admin_comment}</div>
+          </div>
+        ) : null}
+        <div className="modal-actions" style={{ marginTop: 16 }}><button className="btn ghost" onClick={onClose}>Close</button></div>
+      </div>
     </div>
   );
 }
