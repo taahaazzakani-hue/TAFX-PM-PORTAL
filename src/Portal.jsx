@@ -180,7 +180,7 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
       <div className="hero-card">
         <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
         <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
-        <div className="meta">{courses.length} stage{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani &amp; Joshua R</div>
+        <div className="meta">{courses.length} stage{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
       </div>
 
       {billing?.active && (
