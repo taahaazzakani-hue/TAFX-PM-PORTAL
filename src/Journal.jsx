@@ -38,6 +38,22 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('journal');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [tagLib, setTagLib] = useState(user.journal_tags || []);
+
+  async function createTag(name) {
+    const t = (name || '').trim();
+    if (!t || t.length > 30) return null;
+    if (tagLib.some((x) => x.toLowerCase() === t.toLowerCase())) return tagLib.find((x) => x.toLowerCase() === t.toLowerCase());
+    const next = [...tagLib, t];
+    setTagLib(next);
+    if (!readOnly) { try { await call('update_profile', { user_id: user.id, journal_tags: next }); } catch {} }
+    return t;
+  }
+  async function deleteTag(name) {
+    const next = tagLib.filter((x) => x !== name);
+    setTagLib(next);
+    if (!readOnly) { try { await call('update_profile', { user_id: user.id, journal_tags: next }); } catch {} }
+  }
 
   const load = () => {
     if (readOnly) { call('admin_journal_entries', { admin_id: user.adminId, user_id: user.id }).then(setData); }
@@ -55,7 +71,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   // Recompute stats for the filtered set (backend stats cover all types together).
   const stats = typeFilter === 'all' ? (data.stats[level] || computeStats(allLevelEntries)) : computeStats(entries);
   const ql = q.trim().toLowerCase();
-  const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
+  const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || []), ...(e.tags || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
 
   async function saveEntry(entry) {
     await call('journal_save', { user_id: user.id, entry: { ...entry, level } });
@@ -126,7 +142,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
         )
       )}
 
-      {showForm && <EntryForm entry={editing} confluences={confluences} onSave={saveEntry} onClose={() => { setShowForm(false); setEditing(null); }} />}
+      {showForm && <EntryForm entry={editing} confluences={confluences} tagLib={tagLib} onCreateTag={createTag} onDeleteTag={deleteTag} onSave={saveEntry} onClose={() => { setShowForm(false); setEditing(null); }} />}
       {detail && <EntryDetail entry={detail} readOnly={readOnly} adminId={readOnly ? user.adminId : null} onClose={() => setDetail(null)} onCommented={load} />}
     </div>
   );
@@ -183,14 +199,91 @@ function StatsSummary({ stats }) {
   );
 }
 
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const weekdayOf = (e) => WEEKDAYS[(new Date(Number(e.trade_date || e.created_at)).getDay() + 6) % 7];
+
+function bestWorst(data) {
+  const rows = Object.entries(data || {}).filter(([, v]) => v && v.trades > 0);
+  if (rows.length < 2) return null;
+  const best = rows.reduce((a, b) => (b[1].cumPct > a[1].cumPct ? b : a));
+  const worst = rows.reduce((a, b) => (b[1].cumPct < a[1].cumPct ? b : a));
+  if (best[0] === worst[0]) return null;
+  return { best, worst };
+}
+
+function Insights({ dims }) {
+  const rows = dims.map((d) => ({ ...d, bw: bestWorst(d.data) })).filter((d) => d.bw);
+  if (!rows.length) return null;
+  const fmt = ([k, v]) => `${k} (${v.cumPct > 0 ? '+' : ''}${v.cumPct}% · ${v.trades} trade${v.trades !== 1 ? 's' : ''})`;
+  return (
+    <div className="card">
+      <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>Your edge at a glance</h3>
+      <div className="hint" style={{ marginBottom: 12 }}>Strongest and weakest conditions from your logged trades.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map((d) => (
+          <div key={d.label} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: 'var(--panel-2)', fontSize: 13 }}>
+            <div style={{ fontWeight: 700 }}>{d.icon} {d.label}</div>
+            <div style={{ color: 'var(--green)' }}>⭐ Best: <b>{fmt(d.bw.best)}</b></div>
+            <div style={{ color: 'var(--red)' }}>⚠️ Worst: <b>{fmt(d.bw.worst)}</b></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ title, hint, rows }) {
+  const shown = rows.filter(([, v]) => v.trades > 0);
+  if (shown.length < 2) return null;
+  const maxAbs = Math.max(...shown.map(([, v]) => Math.abs(v.cumPct)), 0.01);
+  return (
+    <div className="card">
+      <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>{title}</h3>
+      {hint && <div className="hint" style={{ marginBottom: 12 }}>{hint}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {shown.map(([k, v]) => {
+          const pos = v.cumPct >= 0;
+          const w = Math.max(4, (Math.abs(v.cumPct) / maxAbs) * 100);
+          return (
+            <div key={k} style={{ display: 'grid', gridTemplateColumns: '92px 1fr 92px', gap: 10, alignItems: 'center', fontSize: 13 }}>
+              <div style={{ color: 'var(--ink-soft)', fontWeight: 600 }}>{k}</div>
+              <div style={{ background: 'var(--panel-2)', borderRadius: 6, height: 18, overflow: 'hidden' }}>
+                <div style={{ width: `${w}%`, height: '100%', borderRadius: 6, background: pos ? 'var(--green)' : 'var(--red)', opacity: .85, transition: 'width .4s' }} />
+              </div>
+              <div style={{ textAlign: 'right', fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{v.cumPct}% <span style={{ color: 'var(--ink-faint)', fontWeight: 500 }}>· {v.trades}</span></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsPanel({ stats, entries, onDay }) {
   const topConf = Object.entries(stats.confluences || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const withDay = entries.map((e) => ({ ...e, _wd: weekdayOf(e), _pair: (e.pair || '').toUpperCase().trim() }));
+  const byDay = groupBy(withDay, '_wd', WEEKDAYS);
+  const pairKeys = Array.from(new Set(withDay.map((e) => e._pair).filter(Boolean)));
+  const byPair = groupBy(withDay, '_pair', pairKeys);
+  const tagKeys = Array.from(new Set(entries.flatMap((e) => e.tags || [])));
+  const byTag = {};
+  for (const t of tagKeys) byTag[t] = aggregate(entries.filter((e) => (e.tags || []).includes(t)));
   return (
     <div>
+      <Insights dims={[
+        { label: 'Day', icon: '📅', data: byDay },
+        { label: 'Session', icon: '🕐', data: stats.byKillzone },
+        { label: 'Model', icon: '📐', data: stats.byModel },
+        { label: 'Pair', icon: '💱', data: byPair },
+        { label: 'Tag', icon: '🏷', data: byTag },
+      ]} />
       {entries.length > 1 && <EquityCurve entries={entries} />}
+      <BarChart title="Net % by day of week" hint="Which days actually make you money." rows={WEEKDAYS.map((d) => [d, byDay[d]])} />
       <PnlCalendar entries={entries} onDay={onDay} />
       <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
       <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model']} />
+      {tagKeys.length > 0 && <Breakdown title="Performance by tag" data={byTag} order={tagKeys} />}
+      {pairKeys.length > 1 && <Breakdown title="Performance by pair" data={byPair} order={pairKeys} />}
       {topConf.length > 0 && (
         <div className="card">
           <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Most-used confluences</h3>
@@ -307,11 +400,17 @@ function PnlCalendar({ entries, onDay }) {
   );
 }
 
-function EntryForm({ entry, confluences, onSave, onClose }) {
-  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', trade_type: 'live', confluences: [], notes: '', images: [] });
+function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, onSave, onClose }) {
+  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', trade_type: 'live', confluences: [], tags: [], notes: '', images: [] });
+  const [newTag, setNewTag] = useState('');
   const [uploading, setUploading] = useState(false);
   const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
   const toggleConf = (label) => { const has = (f.confluences || []).includes(label); setF({ ...f, confluences: has ? f.confluences.filter((c) => c !== label) : [...(f.confluences || []), label] }); };
+  const toggleTag = (t) => { const has = (f.tags || []).includes(t); setF({ ...f, tags: has ? f.tags.filter((x) => x !== t) : [...(f.tags || []), t] }); };
+  async function handleCreateTag() {
+    const t = await onCreateTag(newTag);
+    if (t) { setNewTag(''); if (!(f.tags || []).includes(t)) setF((s) => ({ ...s, tags: [...(s.tags || []), t] })); }
+  }
   async function addImages(ev) {
     const files = Array.from(ev.target.files || []); if (!files.length) return;
     setUploading(true);
@@ -360,6 +459,21 @@ function EntryForm({ entry, confluences, onSave, onClose }) {
             {(confluences || []).map((c) => { const on = (f.confluences || []).includes(c.label); return (
               <button key={c.id} type="button" onClick={() => toggleConf(c.label)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>{c.label}</button>
             ); })}
+          </div>
+        </div>
+        <div className="field">
+          <label>My tags</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+            {tagLib.length === 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Create your own tags (e.g. "FOMO", "A+ setup", "News day") and reuse them on every trade.</span>}
+            {tagLib.map((t) => { const on = (f.tags || []).includes(t); return (
+              <button key={t} type="button" onClick={() => toggleTag(t)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>🏷 {t}</button>
+            ); })}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <input value={newTag} onChange={(e) => setNewTag(e.target.value)} placeholder="New tag…" maxLength={30}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }}
+              style={{ flex: 1, background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--ink)', padding: '9px 12px', borderRadius: 9, fontSize: 13 }} />
+            <button type="button" className="mini-btn" style={{ margin: 0 }} onClick={handleCreateTag} disabled={!newTag.trim()}>+ Add tag</button>
           </div>
         </div>
         <div className="field"><label>Notes / reflection</label><textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="What did you see? What would you do differently?" /></div>
@@ -413,6 +527,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           {entry.killzone && <span>🕐 {entry.killzone}</span>}
           {entry.model && <span>📐 {entry.model}</span>}
           <span>{(entry.trade_type || 'live') === 'backtest' ? '🧪 Backtest' : '🟢 Live'}</span>
+          {(entry.tags || []).map((t) => <span key={t} className="pill" style={{ fontSize: 11 }}>🏷 {t}</span>)}
         </div>
         {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
         {entry.notes && <p style={{ fontSize: 14, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', marginBottom: 14 }}>{entry.notes}</p>}
