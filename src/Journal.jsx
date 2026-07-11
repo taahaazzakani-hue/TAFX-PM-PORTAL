@@ -259,17 +259,136 @@ function BarChart({ title, hint, rows }) {
   );
 }
 
+function calcAdvanced(entries) {
+  const wins = entries.filter((e) => e.outcome === 'win');
+  const losses = entries.filter((e) => e.outcome === 'loss');
+  const grossWin = wins.reduce((a, e) => a + Math.abs(Number(e.pct) || 0), 0);
+  const grossLoss = losses.reduce((a, e) => a + Math.abs(Number(e.pct) || 0), 0);
+  const profitFactor = grossLoss > 0 ? +(grossWin / grossLoss).toFixed(2) : (grossWin > 0 ? 99 : 0);
+  const avgWin = wins.length ? +(grossWin / wins.length).toFixed(2) : 0;
+  const avgLoss = losses.length ? +(grossLoss / losses.length).toFixed(2) : 0;
+  const byDate = {};
+  for (const e of entries) { const k = new Date(Number(e.trade_date || e.created_at)).toISOString().slice(0, 10); byDate[k] = (byDate[k] || 0) + (Number(e.pct) || 0); }
+  const days = Object.entries(byDate).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const dayWinPct = days.length ? Math.round((days.filter(([, v]) => v > 0).length / days.length) * 100) : 0;
+  const expectancy = entries.length ? +((grossWin - grossLoss) / entries.length).toFixed(2) : 0;
+  return { profitFactor, avgWin, avgLoss, days, dayWinPct, expectancy };
+}
+
+function Donut({ pct, size = 74, color = 'var(--gold)' }) {
+  const r = (size - 10) / 2, c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--panel-2)" strokeWidth="9" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
+        strokeDasharray={`${(Math.min(100, Math.max(0, pct)) / 100) * c} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+      <text x="50%" y="52%" dominantBaseline="middle" textAnchor="middle" fontSize="15" fontWeight="800" fill="var(--ink)">{Math.round(pct)}%</text>
+    </svg>
+  );
+}
+
+function TraderScore({ stats, adv }) {
+  const axes = [
+    { label: 'Win %', v: Math.min(100, stats.winRate || 0) },
+    { label: 'Profit factor', v: Math.min(100, ((adv.profitFactor || 0) / 3) * 100) },
+    { label: 'Avg RR', v: Math.min(100, ((stats.avgRR || 0) / 3) * 100) },
+    { label: 'Day win %', v: Math.min(100, adv.dayWinPct || 0) },
+    { label: 'Consistency', v: Math.min(100, ((stats.streak || 0) / 10) * 100 + Math.min(50, (stats.trades || 0) * 2)) },
+  ];
+  const score = Math.round(axes.reduce((a, x) => a + x.v, 0) / axes.length);
+  const W = 240, H = 200, cx = W / 2, cy = H / 2 + 6, R = 70;
+  const pt = (i, r) => { const a = (Math.PI * 2 * i) / axes.length - Math.PI / 2; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+  const poly = (r) => axes.map((_, i) => pt(i, r).map((n) => n.toFixed(1)).join(',')).join(' ');
+  const dataPoly = axes.map((x, i) => pt(i, (x.v / 100) * R).map((n) => n.toFixed(1)).join(',')).join(' ');
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <h3 style={{ fontSize: 16, margin: 0 }}>Trader score</h3>
+        <span style={{ fontFamily: 'var(--serif)', fontSize: 30, fontWeight: 700, color: score >= 60 ? 'var(--green)' : score >= 35 ? 'var(--gold-soft)' : 'var(--red)' }}>{score}</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>/ 100</span>
+      </div>
+      <div className="hint">Your all-round edge across five disciplines.</div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxWidth: 300, display: 'block', margin: '0 auto' }}>
+        {[0.33, 0.66, 1].map((f) => <polygon key={f} points={poly(R * f)} fill="none" stroke="var(--line)" strokeWidth="1" />)}
+        {axes.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--line)" strokeWidth="1" />; })}
+        <polygon points={dataPoly} fill="rgba(31,95,191,.2)" stroke="var(--gold)" strokeWidth="2" strokeLinejoin="round" />
+        {axes.map((x, i) => { const [px, py] = pt(i, R + 16); return <text key={x.label} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize="9.5" fontWeight="600" fill="var(--ink-soft)">{x.label}</text>; })}
+      </svg>
+    </div>
+  );
+}
+
+function DailyPnl({ days }) {
+  const shown = days.slice(-40);
+  if (shown.length < 2) return null;
+  const maxAbs = Math.max(...shown.map(([, v]) => Math.abs(v)), 0.01);
+  const W = 600, H = 150, mid = H / 2, bw = Math.max(4, Math.min(18, W / shown.length - 3));
+  return (
+    <div className="card" style={{ marginBottom: 0 }}>
+      <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>Daily net P/L</h3>
+      <div className="hint" style={{ marginBottom: 8 }}>Each bar is one trading day (last {shown.length} days).</div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        <line x1="0" y1={mid} x2={W} y2={mid} stroke="var(--line)" strokeWidth="1" />
+        {shown.map(([d, v], i) => {
+          const h = (Math.abs(v) / maxAbs) * (mid - 8);
+          const x = (i / shown.length) * W + 2;
+          return <rect key={d} x={x} y={v >= 0 ? mid - h : mid} width={bw} height={Math.max(2, h)} rx="2"
+            fill={v >= 0 ? 'var(--green)' : 'var(--red)'} opacity=".85"><title>{d}: {v > 0 ? '+' : ''}{v.toFixed(2)}%</title></rect>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function KpiStrip({ stats, adv }) {
+  const pf = adv.profitFactor >= 99 ? '∞' : adv.profitFactor;
+  const winPart = adv.avgWin, lossPart = adv.avgLoss, tot = winPart + lossPart || 1;
+  return (
+    <div>
+      <div className="stat-row" style={{ marginBottom: 14 }}>
+        <div className="stat" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Donut pct={stats.winRate || 0} color={(stats.winRate || 0) >= 50 ? 'var(--green)' : 'var(--gold)'} />
+          <div><div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Win rate</div><div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{stats.trades} trades</div></div>
+        </div>
+        <div className="stat"><div className="v" style={{ color: (stats.cumPct || 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{(stats.cumPct || 0) > 0 ? '+' : ''}{stats.cumPct || 0}%</div><div className="l">Net P/L</div></div>
+        <div className="stat"><div className="v" style={{ color: adv.profitFactor >= 1 ? 'var(--green)' : 'var(--red)' }}>{pf}</div><div className="l">Profit factor</div></div>
+        <div className="stat"><div className="v">{adv.dayWinPct}%</div><div className="l">Day win rate</div></div>
+      </div>
+      <div className="card">
+        <h3 style={{ fontSize: 16, margin: '0 0 10px' }}>Average win vs average loss</h3>
+        <div style={{ display: 'flex', height: 22, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--line)' }}>
+          <div style={{ width: `${(winPart / tot) * 100}%`, background: 'var(--green)', opacity: .85 }} />
+          <div style={{ width: `${(lossPart / tot) * 100}%`, background: 'var(--red)', opacity: .85 }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 13 }}>
+          <span style={{ color: 'var(--green)', fontWeight: 700 }}>Avg win +{adv.avgWin}%</span>
+          <span style={{ color: 'var(--ink-faint)' }}>Expectancy {adv.expectancy > 0 ? '+' : ''}{adv.expectancy}% / trade</span>
+          <span style={{ color: 'var(--red)', fontWeight: 700 }}>Avg loss −{adv.avgLoss}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsPanel({ stats, entries, onDay }) {
   const topConf = Object.entries(stats.confluences || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const withDay = entries.map((e) => ({ ...e, _wd: weekdayOf(e), _pair: (e.pair || '').toUpperCase().trim() }));
+  const withDay = entries.map((e) => ({ ...e, _wd: weekdayOf(e), _pair: (e.pair || '').toUpperCase().trim(), _dir: e.direction === 'short' ? 'Short' : 'Long' }));
   const byDay = groupBy(withDay, '_wd', WEEKDAYS);
+  const byDir = groupBy(withDay, '_dir', ['Long', 'Short']);
   const pairKeys = Array.from(new Set(withDay.map((e) => e._pair).filter(Boolean)));
   const byPair = groupBy(withDay, '_pair', pairKeys);
   const tagKeys = Array.from(new Set(entries.flatMap((e) => e.tags || [])));
   const byTag = {};
   for (const t of tagKeys) byTag[t] = aggregate(entries.filter((e) => (e.tags || []).includes(t)));
+  const adv = calcAdvanced(entries);
   return (
     <div>
+      <KpiStrip stats={stats} adv={adv} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <TraderScore stats={stats} adv={adv} />
+        <DailyPnl days={adv.days} />
+      </div>
+      {entries.length > 1 && <EquityCurve entries={entries} />}
       <Insights dims={[
         { label: 'Day', icon: '📅', data: byDay },
         { label: 'Session', icon: '🕐', data: stats.byKillzone },
@@ -277,9 +396,9 @@ function AnalyticsPanel({ stats, entries, onDay }) {
         { label: 'Pair', icon: '💱', data: byPair },
         { label: 'Tag', icon: '🏷', data: byTag },
       ]} />
-      {entries.length > 1 && <EquityCurve entries={entries} />}
       <BarChart title="Net % by day of week" hint="Which days actually make you money." rows={WEEKDAYS.map((d) => [d, byDay[d]])} />
       <PnlCalendar entries={entries} onDay={onDay} />
+      <Breakdown title="Long vs Short" data={byDir} order={['Long', 'Short']} />
       <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
       <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model']} />
       {tagKeys.length > 0 && <Breakdown title="Performance by tag" data={byTag} order={tagKeys} />}
