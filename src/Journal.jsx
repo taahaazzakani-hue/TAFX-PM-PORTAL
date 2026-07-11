@@ -6,6 +6,28 @@ import ImageGallery from './ImageGallery.jsx';
 const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// Client-side stats (mirrors backend computeStats) so we can recompute for a filtered set of entries.
+function aggregate(entries) {
+  const n = entries.length;
+  if (!n) return { trades: 0, winRate: 0, cumPct: 0, cumAmt: 0, avgRR: 0 };
+  let wins = 0, cumPct = 0, cumAmt = 0, sumRR = 0;
+  for (const e of entries) { if (e.outcome === 'win') wins++; cumPct += Number(e.pct) || 0; cumAmt += Number(e.amount) || 0; sumRR += Number(e.rr) || 0; }
+  return { trades: n, winRate: Math.round((wins / n) * 100), cumPct: +cumPct.toFixed(2), cumAmt: +cumAmt.toFixed(2), avgRR: +(sumRR / n).toFixed(2) };
+}
+function groupBy(entries, key, buckets) { const out = {}; for (const b of buckets) out[b] = aggregate(entries.filter((e) => (e[key] || '') === b)); return out; }
+function computeStats(entries) {
+  const n = entries.length;
+  const base = { trades: 0, winRate: 0, avgRR: 0, avgPct: 0, cumPct: 0, cumAmt: 0, streak: 0, best: 0, worst: 0, confluences: {}, byKillzone: {}, byModel: {} };
+  if (!n) return base;
+  let wins = 0, sumRR = 0, sumPct = 0, cumPct = 0, cumAmt = 0, best = -1e9, worst = 1e9; const conf = {};
+  for (const e of entries) { if (e.outcome === 'win') wins++; sumRR += Number(e.rr) || 0; const pc = Number(e.pct) || 0; sumPct += pc; cumPct += pc; cumAmt += Number(e.amount) || 0; if (pc > best) best = pc; if (pc < worst) worst = pc; for (const c of (e.confluences || [])) conf[c] = (conf[c] || 0) + 1; }
+  const days = new Set(entries.map((e) => new Date(Number(e.trade_date || e.created_at)).toISOString().slice(0, 10)));
+  let streak = 0; const d = new Date();
+  for (;;) { const key = d.toISOString().slice(0, 10); if (days.has(key)) { streak++; d.setDate(d.getDate() - 1); } else { if (streak === 0 && key === new Date().toISOString().slice(0, 10)) { d.setDate(d.getDate() - 1); continue; } break; } }
+  return { trades: n, winRate: Math.round((wins / n) * 100), avgRR: +(sumRR / n).toFixed(2), avgPct: +(sumPct / n).toFixed(2), cumPct: +cumPct.toFixed(2), cumAmt: +cumAmt.toFixed(2), streak, best: +best.toFixed(2), worst: +worst.toFixed(2), confluences: conf, byKillzone: groupBy(entries, 'killzone', ['Asia', 'London', 'New York']), byModel: groupBy(entries, 'model', ['TA Model', 'Noctus Model']) };
+}
+const TYPE_TABS = [['all', 'All'], ['live', 'Live'], ['backtest', 'Backtest']];
+
 export default function Journal({ user, confluences, readOnly = false, preloaded = null }) {
   const myLevels = user.levels || [];
   const [level, setLevel] = useState(myLevels[0] || 'beginner');
@@ -15,6 +37,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const [detail, setDetail] = useState(null);
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('journal');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const load = () => {
     if (readOnly) { call('admin_journal_entries', { admin_id: user.adminId, user_id: user.id }).then(setData); }
@@ -26,8 +49,11 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   if (!data) return <div className="spinner" />;
 
   const levelsToShow = readOnly ? ['beginner', 'intermediate', 'advanced'] : myLevels;
-  const entries = data.entries.filter((e) => e.level === level);
-  const stats = data.stats[level] || {};
+  const allLevelEntries = data.entries.filter((e) => e.level === level);
+  // Filter by trade type. Entries saved before this feature default to 'live'.
+  const entries = typeFilter === 'all' ? allLevelEntries : allLevelEntries.filter((e) => (e.trade_type || 'live') === typeFilter);
+  // Recompute stats for the filtered set (backend stats cover all types together).
+  const stats = typeFilter === 'all' ? (data.stats[level] || computeStats(allLevelEntries)) : computeStats(entries);
   const ql = q.trim().toLowerCase();
   const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
 
@@ -53,6 +79,18 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
             background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', marginBottom: -1, fontSize: 14, fontWeight: 600,
             color: tab === k ? 'var(--gold)' : 'var(--ink-soft)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
           }}>{lbl}</button>
+        ))}
+      </div>
+
+      {/* Live / Backtest / All filter — applies to both Journal stats and Analytics */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
+        {TYPE_TABS.map(([k, lbl]) => (
+          <button key={k} onClick={() => setTypeFilter(k)} style={{
+            cursor: 'pointer', padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 999,
+            border: `1px solid ${typeFilter === k ? 'var(--gold)' : 'var(--line)'}`,
+            background: typeFilter === k ? 'var(--gold)' : 'var(--panel)',
+            color: typeFilter === k ? '#fff' : 'var(--ink-soft)',
+          }}>{lbl}{k !== 'all' ? ' trades' : ''}</button>
         ))}
       </div>
 
@@ -270,7 +308,7 @@ function PnlCalendar({ entries, onDay }) {
 }
 
 function EntryForm({ entry, confluences, onSave, onClose }) {
-  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', confluences: [], notes: '', images: [] });
+  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', trade_type: 'live', confluences: [], notes: '', images: [] });
   const [uploading, setUploading] = useState(false);
   const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
   const toggleConf = (label) => { const has = (f.confluences || []).includes(label); setF({ ...f, confluences: has ? f.confluences.filter((c) => c !== label) : [...(f.confluences || []), label] }); };
@@ -309,6 +347,12 @@ function EntryForm({ entry, confluences, onSave, onClose }) {
               <option value="">— Select —</option><option value="TA Model">TA Model</option><option value="Noctus Model">Noctus Model</option>
             </select>
           </div>
+        </div>
+        <div className="field"><label>Trade type</label>
+          <select value={f.trade_type || 'live'} onChange={(e) => setF({ ...f, trade_type: e.target.value })}>
+            <option value="live">Live trade</option>
+            <option value="backtest">Backtest</option>
+          </select>
         </div>
         <div className="field">
           <label>Confluences (TA Model)</label>
@@ -368,6 +412,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           <span>P/L {entry.amount}</span>
           {entry.killzone && <span>🕐 {entry.killzone}</span>}
           {entry.model && <span>📐 {entry.model}</span>}
+          <span>{(entry.trade_type || 'live') === 'backtest' ? '🧪 Backtest' : '🟢 Live'}</span>
         </div>
         {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
         {entry.notes && <p style={{ fontSize: 14, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', marginBottom: 14 }}>{entry.notes}</p>}
