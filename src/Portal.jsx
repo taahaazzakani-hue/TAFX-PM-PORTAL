@@ -37,7 +37,7 @@ function BillingNotice({ billing }) {
 export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const [user, setUser] = useState(initialUser);
   const [content, setContent] = useState(null);
-  const [view, setView] = useState('learn');
+  const [view, setView] = useState('dashboard');
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeVideo, setActiveVideo] = useState(null);
   const [watched, setWatched] = useState(new Set(initialUser.watched_videos || []));
@@ -106,6 +106,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           <div className="sub">Private Mentorship</div>
         </div>
         <div className="sb-body">
+          <NavItem id="dashboard" icon="🏠" label="Dashboard" />
           <div className="sb-section-label">Learning</div>
           {courses.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
           {courses.map((c) => (
@@ -136,10 +137,14 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Calculator' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Calculator' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} />
+          {view === 'dashboard' && (
+            <Dashboard user={user} courses={courses} content={content} courseProgress={courseProgress}
+              onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
+          )}
           {view === 'journal' && <Journal user={user} confluences={content.confluences} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
@@ -159,6 +164,64 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
+  const totalLessons = (content.videos || []).filter((v) => courses.some((c) => c.id === v.course_id)).length;
+  const firstName = (user.name || '').split(' ')[0];
+  const billing = user.billing;
+  const dueStr = billing?.paid_until ? new Date(billing.paid_until).toLocaleDateString() : null;
+  const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
+
+  return (
+    <div>
+      <div className="hero-card">
+        <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
+        <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
+        <div className="meta">{courses.length} stage{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani &amp; Joshua R</div>
+      </div>
+
+      {billing?.active && (
+        <div className="strip-banner">
+          <span className="tag">Private Mentorship</span>
+          <span className="item">💎 Exclusive curriculum</span>
+          <span className="item">🎯 1-on-1 mentor feedback</span>
+          <span className="sp" />
+          <span className="item" style={{ fontWeight: 600, color: billing.status === 'overdue' ? 'var(--red)' : 'var(--ink)' }}>
+            {billing.status === 'overdue' ? 'Payment overdue' : dueStr ? `Next payment · ${dueStr}` : `R${billing.fee}/month`}
+          </span>
+        </div>
+      )}
+
+      {courses.length === 0 ? (
+        <div className="empty"><div className="big serif">Welcome</div><div>Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do.</div></div>
+      ) : (
+        <div className="dash-grid">
+          {courses.map((c) => {
+            const pct = courseProgress(c.id);
+            const n = lessonsIn(c.id);
+            return (
+              <div className="course-card" key={c.id} onClick={() => onOpenCourse(c.id)}>
+                <div className="cover">
+                  <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
+                  <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+                </div>
+                <div className="body">
+                  <div className="ct">{c.title}</div>
+                  <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="foot">
+                    <span className="pct">{pct}% complete</span>
+                    <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
