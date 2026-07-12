@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { call, saveSession, paystackInit } from './api.js';
+import { LegalFooter } from './Legal.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
 
@@ -34,6 +35,7 @@ export default function Auth({ onAuthed }) {
         {mode === 'register' && <RegisterForm setMode={setMode} />}
         {mode === 'admin' && <AdminForm onAuthed={onAuthed} setMode={setMode} />}
         {mode === 'forgot' && <ForgotForm setMode={setMode} />}
+        <LegalFooter />
       </div>
     </div>
   );
