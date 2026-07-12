@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { call, saveSession } from './api.js';
+import { call, saveSession, paystackInit } from './api.js';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
 
@@ -44,15 +44,28 @@ function LoginForm({ onAuthed, setMode }) {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [overdue, setOverdue] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
-    setErr(''); setBusy(true);
+    setErr(''); setOverdue(false); setBusy(true);
     try {
       const { user } = await call('login', { email, password });
       saveSession(user);
       onAuthed(user);
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e) {
+      setErr(e.message);
+      if ((e.message || '').toLowerCase().includes('overdue')) setOverdue(true);
+    } finally { setBusy(false); }
+  }
+
+  async function payNow() {
+    setPaying(true); setErr('');
+    try {
+      const { url } = await paystackInit({ email, return_url: window.location.origin });
+      window.location.href = url;
+    } catch (e) { setErr(e.message); setPaying(false); }
   }
 
   return (
@@ -61,6 +74,11 @@ function LoginForm({ onAuthed, setMode }) {
       <h1 className="serif">Welcome back</h1>
       <p className="lead">Sign in to your mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
+      {overdue && (
+        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={payNow} disabled={paying}>
+          {paying ? 'Opening secure checkout…' : 'Pay R830 now to restore access'}
+        </button>
+      )}
       <form onSubmit={submit}>
         <div className="field">
           <label>Email</label>
