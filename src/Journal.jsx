@@ -24,7 +24,7 @@ function computeStats(entries) {
   const days = new Set(entries.map((e) => new Date(Number(e.trade_date || e.created_at)).toISOString().slice(0, 10)));
   let streak = 0; const d = new Date();
   for (;;) { const key = d.toISOString().slice(0, 10); if (days.has(key)) { streak++; d.setDate(d.getDate() - 1); } else { if (streak === 0 && key === new Date().toISOString().slice(0, 10)) { d.setDate(d.getDate() - 1); continue; } break; } }
-  return { trades: n, winRate: Math.round((wins / n) * 100), avgRR: +(sumRR / n).toFixed(2), avgPct: +(sumPct / n).toFixed(2), cumPct: +cumPct.toFixed(2), cumAmt: +cumAmt.toFixed(2), streak, best: +best.toFixed(2), worst: +worst.toFixed(2), confluences: conf, byKillzone: groupBy(entries, 'killzone', ['Asia', 'London', 'New York']), byModel: groupBy(entries, 'model', ['TA Model', 'Noctus Model']) };
+  return { trades: n, winRate: Math.round((wins / n) * 100), avgRR: +(sumRR / n).toFixed(2), avgPct: +(sumPct / n).toFixed(2), cumPct: +cumPct.toFixed(2), cumAmt: +cumAmt.toFixed(2), streak, best: +best.toFixed(2), worst: +worst.toFixed(2), confluences: conf, byKillzone: groupBy(entries, 'killzone', ['Asia', 'London', 'New York']), byModel: groupBy(entries, 'model', ['TA Model', 'Noctus Model', 'PM Session Model']) };
 }
 const TYPE_TABS = [['all', 'All'], ['live', 'Live'], ['backtest', 'Backtest']];
 
@@ -400,7 +400,7 @@ function AnalyticsPanel({ stats, entries, onDay }) {
       <PnlCalendar entries={entries} onDay={onDay} />
       <Breakdown title="Long vs Short" data={byDir} order={['Long', 'Short']} />
       <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
-      <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model']} />
+      <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model', 'PM Session Model']} />
       {tagKeys.length > 0 && <Breakdown title="Performance by tag" data={byTag} order={tagKeys} />}
       {pairKeys.length > 1 && <Breakdown title="Performance by pair" data={byPair} order={pairKeys} />}
       {topConf.length > 0 && (
@@ -562,7 +562,7 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
           </div>
           <div className="field"><label>Model</label>
             <select value={f.model} onChange={(e) => setF({ ...f, model: e.target.value })}>
-              <option value="">— Select —</option><option value="TA Model">TA Model</option><option value="Noctus Model">Noctus Model</option>
+              <option value="">— Select —</option><option value="TA Model">TA Model</option><option value="Noctus Model">Noctus Model</option><option value="PM Session Model">PM Session Model</option>
             </select>
           </div>
         </div>
