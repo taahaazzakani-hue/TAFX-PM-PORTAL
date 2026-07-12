@@ -20,7 +20,8 @@ const CONTENT_COURSES = [
 ];
 
 export default function Admin({ user, onLogout, onUpdated }) {
-  const [tab, setTab] = useState('dashboard');
+  const scoped = user.admin_scope === 'advanced';
+  const [tab, setTab] = useState(scoped ? 'students' : 'dashboard');
   const T = ({ id, icon, label }) => (
     <div className="nav-course"><div className={`row ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{icon} {label}</div></div>
   );
@@ -34,16 +35,16 @@ export default function Admin({ user, onLogout, onUpdated }) {
           </div>
         </div>
         <div className="sb-body">
-          <T id="dashboard" icon={<IcGrid />} label="Command Center" />
+          {!scoped && <T id="dashboard" icon={<IcGrid />} label="Command Center" />}
           <div className="sb-section-label">Manage</div>
           <T id="students" icon={<IcUsers />} label="Students" />
           <T id="content" icon={<IcVideo />} label="Content" />
           <T id="homework" icon={<IcClipboard />} label="Homework" />
           <T id="journals" icon={<IcJournal />} label="Journals" />
-          <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />
-          <T id="confluences" icon={<IcTag />} label="Confluences" />
-          <T id="overview" icon={<IcChart />} label="Overview" />
-          <T id="billing" icon={<IcCard />} label="Billing" />
+          {!scoped && <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />}
+          {!scoped && <T id="confluences" icon={<IcTag />} label="Confluences" />}
+          {!scoped && <T id="overview" icon={<IcChart />} label="Overview" />}
+          {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
         <div className="sb-foot">
@@ -183,6 +184,7 @@ function AdminDashboard({ admin, goTo }) {
 
 /* ---------- STUDENTS with per-level membership ---------- */
 function Students({ admin }) {
+  const scoped = admin.admin_scope === 'advanced';
   const [users, setUsers] = useState(null);
   const [filter, setFilter] = useState('pending');
   const [q, setQ] = useState('');
@@ -250,14 +252,14 @@ function Students({ admin }) {
           </table>
         </div>
       )}
-      {approve && <ApproveModal user={approve} onClose={() => setApprove(null)} onConfirm={(levels) => setStatus(approve.id, 'approved', levels)} />}
+      {approve && <ApproveModal scoped={scoped} user={approve} onClose={() => setApprove(null)} onConfirm={(levels) => setStatus(approve.id, 'approved', levels)} />}
     </div>
   );
 }
 
-function ApproveModal({ user, onClose, onConfirm }) {
-  const [levels, setLevels] = useState(user.levels?.length ? user.levels : ['beginner']);
-  const toggle = (lv) => setLevels(levels.includes(lv) ? levels.filter((x) => x !== lv) : [...levels, lv]);
+function ApproveModal({ user, onClose, onConfirm, scoped }) {
+  const [levels, setLevels] = useState(scoped ? ['advanced'] : (user.levels?.length ? user.levels : ['beginner']));
+  const toggle = (lv) => { if (scoped) return; setLevels(levels.includes(lv) ? levels.filter((x) => x !== lv) : [...levels, lv]); };
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -280,8 +282,10 @@ function ApproveModal({ user, onClose, onConfirm }) {
 
 /* ---------- CONTENT with Bunny picker ---------- */
 function Content({ admin }) {
+  const scoped = admin.admin_scope === 'advanced';
+  const courseTabs = scoped ? CONTENT_COURSES.filter((c) => c.id === 'pm_advanced') : CONTENT_COURSES;
   const [content, setContent] = useState(null);
-  const [course, setCourse] = useState('pm_beginner');
+  const [course, setCourse] = useState(admin.admin_scope === 'advanced' ? 'pm_advanced' : 'pm_beginner');
   const [modal, setModal] = useState(null);
   const load = () => call('get_content').then(setContent);
   useEffect(() => { load(); }, []);
@@ -364,7 +368,7 @@ function Content({ admin }) {
 
   return (
     <div>
-      <div className="admin-tabs">{CONTENT_COURSES.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
+      <div className="admin-tabs">{courseTabs.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
@@ -502,7 +506,9 @@ function ResourceModal({ data, sections, onSave, onClose }) {
 
 /* ---------- HOMEWORK ADMIN ---------- */
 function HomeworkAdmin({ admin }) {
-  const [level, setLevel] = useState('beginner');
+  const hwScoped = admin.admin_scope === 'advanced';
+  const hwLevels = hwScoped ? LEVELS.filter((l) => l.level === 'advanced') : LEVELS;
+  const [level, setLevel] = useState(hwScoped ? 'advanced' : 'beginner');
   const [modal, setModal] = useState(null);
   const [subs, setSubs] = useState(null);
   const [hw, setHw] = useState(null);
@@ -517,7 +523,7 @@ function HomeworkAdmin({ admin }) {
   if (hw === null) return <div className="spinner" />;
   return (
     <div>
-      <div className="admin-tabs">{LEVELS.map((l) => <button key={l.level} className={level === l.level ? 'active' : ''} onClick={() => setLevel(l.level)}>{l.title}</button>)}</div>
+      <div className="admin-tabs">{hwLevels.map((l) => <button key={l.level} className={level === l.level ? 'active' : ''} onClick={() => setLevel(l.level)}>{l.title}</button>)}</div>
       <button className="mini-btn" style={{ marginBottom: 18 }} onClick={() => setModal({ title: '', body: '', due_date: null, pdf_url: '', pdf_name: '' })}>+ Add homework</button>
       {shown.length === 0 ? <div className="empty"><div className="big serif">No homework</div><div>Add homework for {level} students.</div></div> : shown.map((h) => (
         <div className="card" key={h.id}>
