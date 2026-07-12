@@ -4,12 +4,19 @@ import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
+import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
 const LEVELS = [
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
   { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
+];
+// Courses manageable in the Content tab (TAFX Original is open to all clients,
+// so it is NOT an access level / homework level — content only).
+const CONTENT_COURSES = [
+  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
+  ...LEVELS,
 ];
 
 export default function Admin({ user, onLogout, onUpdated }) {
@@ -20,19 +27,24 @@ export default function Admin({ user, onLogout, onUpdated }) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="sb-head"><img src={LOGO} alt="TA" /><div className="sub">Admin Panel</div></div>
+        <div className="sb-head">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src={LOGO} alt="TA" style={{ width: 34 }} />
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Admin</div>
+          </div>
+        </div>
         <div className="sb-body">
-          <T id="dashboard" icon="🏠" label="Command Center" />
+          <T id="dashboard" icon={<IcGrid />} label="Command Center" />
           <div className="sb-section-label">Manage</div>
-          <T id="students" icon="👥" label="Students" />
-          <T id="content" icon="🎬" label="Content" />
-          <T id="homework" icon="📝" label="Homework" />
-          <T id="journals" icon="📓" label="Journals" />
-          <T id="leaderboard" icon="🏆" label="Leaderboard" />
-          <T id="confluences" icon="🏷️" label="Confluences" />
-          <T id="overview" icon="📊" label="Overview" />
-          <T id="billing" icon="💳" label="Billing" />
-          <T id="profile" icon="⚙️" label="Profile" />
+          <T id="students" icon={<IcUsers />} label="Students" />
+          <T id="content" icon={<IcVideo />} label="Content" />
+          <T id="homework" icon={<IcClipboard />} label="Homework" />
+          <T id="journals" icon={<IcJournal />} label="Journals" />
+          <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />
+          <T id="confluences" icon={<IcTag />} label="Confluences" />
+          <T id="overview" icon={<IcChart />} label="Overview" />
+          <T id="billing" icon={<IcCard />} label="Billing" />
+          <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
         <div className="sb-foot">
           <div className="user-chip"><div className="avatar">TA</div><div className="meta"><div className="n">{user.name}</div><div className="e">Administrator</div></div></div>
@@ -352,7 +364,7 @@ function Content({ admin }) {
 
   return (
     <div>
-      <div className="admin-tabs">{LEVELS.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
+      <div className="admin-tabs">{CONTENT_COURSES.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
