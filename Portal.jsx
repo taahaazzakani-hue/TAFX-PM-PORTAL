@@ -6,8 +6,8 @@ import Homework from './Homework.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 
-const HERO = { pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
-const LEVEL_OF = { pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
+const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
+const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
 function BillingNotice({ billing }) {
@@ -37,16 +37,17 @@ function BillingNotice({ billing }) {
 export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const [user, setUser] = useState(initialUser);
   const [content, setContent] = useState(null);
-  const [view, setView] = useState('learn');
+  const [view, setView] = useState('dashboard');
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeVideo, setActiveVideo] = useState(null);
   const [watched, setWatched] = useState(new Set(initialUser.watched_videos || []));
   const [navOpen, setNavOpen] = useState(false);
+  const [pmOpen, setPmOpen] = useState(true);
 
   useEffect(() => {
     call('get_content').then((d) => {
       setContent(d);
-      const accessible = (d.courses || []).filter((c) => (user.levels || []).includes(LEVEL_OF[c.id]));
+      const accessible = (d.courses || []).filter((c) => c.level === 'original' || (user.levels || []).includes(c.level));
       setActiveCourse((accessible[0] || d.courses?.[0])?.id || null);
     }).catch(() => setContent({ courses: [], sections: [], videos: [], resources: [], confluences: [] }));
     refreshMe(user.id).then((u) => { if (u) { const merged = { ...user, ...u }; setUser(merged); saveSession(merged); } });
@@ -82,7 +83,9 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   if (!content) return <div className="center-load"><div className="spinner" /></div>;
 
   const myLevels = user.levels || [];
-  const courses = (content.courses || []).filter((c) => myLevels.includes(LEVEL_OF[c.id]));
+  const courses = (content.courses || []).filter((c) => c.level === 'original' || myLevels.includes(c.level));
+  const originalCourse = courses.find((c) => c.level === 'original');
+  const pmCourses = courses.filter((c) => c.level !== 'original');
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
   const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
   const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
@@ -106,17 +109,37 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           <div className="sub">Private Mentorship</div>
         </div>
         <div className="sb-body">
+          <NavItem id="dashboard" icon="🏠" label="Dashboard" />
           <div className="sb-section-label">Learning</div>
-          {courses.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
-          {courses.map((c) => (
-            <div key={c.id} className="nav-course">
-              <div className={`row ${view === 'learn' && activeCourse === c.id ? 'active' : ''}`}
-                onClick={() => { setView('learn'); setActiveCourse(c.id); setActiveVideo(null); setNavOpen(false); }}>
-                <span className={`stage-dot dot-${c.level}`} />{c.title}
-                <span className="prog-mini">{courseProgress(c.id)}%</span>
+          {originalCourse && (
+            <div className="nav-course">
+              <div className={`row ${view === 'learn' && activeCourse === originalCourse.id ? 'active' : ''}`}
+                onClick={() => { setView('learn'); setActiveCourse(originalCourse.id); setActiveVideo(null); setNavOpen(false); }}>
+                📚 {originalCourse.title}
+                <span className="prog-mini">{courseProgress(originalCourse.id)}%</span>
               </div>
             </div>
-          ))}
+          )}
+          <div className="nav-course">
+            <div className="row" onClick={() => setPmOpen(!pmOpen)} style={{ fontWeight: 600 }}>
+              💎 Private Mentorship
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-faint)', transform: pmOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▶</span>
+            </div>
+          </div>
+          {pmOpen && (
+            <div style={{ marginLeft: 14, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
+              {pmCourses.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
+              {pmCourses.map((c) => (
+                <div key={c.id} className="nav-course">
+                  <div className={`row ${view === 'learn' && activeCourse === c.id ? 'active' : ''}`}
+                    onClick={() => { setView('learn'); setActiveCourse(c.id); setActiveVideo(null); setNavOpen(false); }}>
+                    <span className={`stage-dot dot-${c.level}`} />{c.title}
+                    <span className="prog-mini">{courseProgress(c.id)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="sb-section-label">Practice</div>
           <NavItem id="journal" icon="📓" label="Journal" />
           <NavItem id="homework" icon="📝" label="Homework" />
@@ -136,10 +159,14 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Calculator' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Calculator' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} />
+          {view === 'dashboard' && (
+            <Dashboard user={user} courses={courses} content={content} courseProgress={courseProgress}
+              onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
+          )}
           {view === 'journal' && <Journal user={user} confluences={content.confluences} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
@@ -159,6 +186,64 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
+  const totalLessons = (content.videos || []).filter((v) => courses.some((c) => c.id === v.course_id)).length;
+  const firstName = (user.name || '').split(' ')[0];
+  const billing = user.billing;
+  const dueStr = billing?.paid_until ? new Date(billing.paid_until).toLocaleDateString() : null;
+  const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
+
+  return (
+    <div>
+      <div className="hero-card">
+        <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
+        <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
+        <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
+      </div>
+
+      {billing?.active && (
+        <div className="strip-banner">
+          <span className="tag">Private Mentorship</span>
+          <span className="item">💎 Exclusive curriculum</span>
+          <span className="item">🎯 1-on-1 mentor feedback</span>
+          <span className="sp" />
+          <span className="item" style={{ fontWeight: 600, color: billing.status === 'overdue' ? 'var(--red)' : 'var(--ink)' }}>
+            {billing.status === 'overdue' ? 'Payment overdue' : dueStr ? `Next payment · ${dueStr}` : `R${billing.fee}/month`}
+          </span>
+        </div>
+      )}
+
+      {courses.length === 0 ? (
+        <div className="empty"><div className="big serif">Welcome</div><div>Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do.</div></div>
+      ) : (
+        <div className="dash-grid">
+          {courses.map((c) => {
+            const pct = courseProgress(c.id);
+            const n = lessonsIn(c.id);
+            return (
+              <div className="course-card" key={c.id} onClick={() => onOpenCourse(c.id)}>
+                <div className="cover">
+                  <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
+                  <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+                </div>
+                <div className="body">
+                  <div className="ct">{c.title}</div>
+                  <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="foot">
+                    <span className="pct">{pct}% complete</span>
+                    <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
