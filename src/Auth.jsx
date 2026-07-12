@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { call, saveSession, paystackInit } from './api.js';
-import { LegalFooter } from './Legal.jsx';
+import { LegalFooter, PaymentConsent } from './Legal.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
 
@@ -48,6 +48,7 @@ function LoginForm({ onAuthed, setMode }) {
   const [busy, setBusy] = useState(false);
   const [overdue, setOverdue] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [consent, setConsent] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
@@ -67,7 +68,7 @@ function LoginForm({ onAuthed, setMode }) {
     try {
       const { url } = await paystackInit({ email, return_url: window.location.origin });
       window.location.href = url;
-    } catch (e) { setErr(e.message); setPaying(false); }
+    } catch (e) { setErr(e.message); setPaying(false); setConsent(false); }
   }
 
   return (
@@ -77,10 +78,11 @@ function LoginForm({ onAuthed, setMode }) {
       <p className="lead">Sign in to your mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
       {overdue && (
-        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={payNow} disabled={paying}>
+        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={() => setConsent(true)} disabled={paying}>
           {paying ? 'Opening secure checkout…' : 'Pay R830 now to restore access'}
         </button>
       )}
+      {consent && <PaymentConsent busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
       <form onSubmit={submit}>
         <div className="field">
           <label>Email</label>
