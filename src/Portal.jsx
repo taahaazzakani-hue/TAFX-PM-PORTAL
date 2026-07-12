@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { call, saveSession, refreshMe } from './api.js';
+import { call, saveSession, refreshMe, paystackInit } from './api.js';
 import { LOGO, TEACH1, TEACH2, TEACH3, TEACH4 } from './assets.js';
 import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
@@ -11,10 +11,19 @@ const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
-function BillingNotice({ billing }) {
+function BillingNotice({ billing, user }) {
+  const [paying, setPaying] = useState(false);
+  const [payErr, setPayErr] = useState('');
   if (!billing || !billing.active || billing.status === 'ok' || billing.status === 'none') return null;
   const due = billing.paid_until ? new Date(billing.paid_until).toLocaleDateString() : '';
   const overdue = billing.status === 'overdue';
+  async function payNow() {
+    setPaying(true); setPayErr('');
+    try {
+      const { url } = await paystackInit({ user_id: user.id, return_url: window.location.origin });
+      window.location.href = url;
+    } catch (e) { setPayErr(e.message); setPaying(false); }
+  }
   return (
     <div style={{
       borderRadius: 10, padding: '14px 18px', marginBottom: 20,
@@ -28,9 +37,13 @@ function BillingNotice({ billing }) {
           {overdue ? 'Subscription overdue' : `Subscription due ${billing.daysLeft === 0 ? 'today' : `in ${billing.daysLeft} day${billing.daysLeft > 1 ? 's' : ''}`}`}
         </div>
         <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-          Your R{billing.fee} monthly private mentorship subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`} Please arrange payment with your mentor.
+          Your R{billing.fee} monthly private mentorship subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`}
+          {payErr && <span style={{ color: 'var(--red)' }}> {payErr}</span>}
         </div>
       </div>
+      <button className="btn" onClick={payNow} disabled={paying} style={{ flex: 'none' }}>
+        {paying ? 'Opening…' : `Pay R${billing.fee} now`}
+      </button>
     </div>
   );
 }
@@ -164,7 +177,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           <h2>{view === 'dashboard' ? 'Home' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Calculator' : 'Profile'}</h2>
         </div>
         <div className="content">
-          <BillingNotice billing={user.billing} />
+          <BillingNotice billing={user.billing} user={user} />
           {view === 'dashboard' && (
             <Dashboard user={user} courses={courses} content={content} courseProgress={courseProgress}
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
