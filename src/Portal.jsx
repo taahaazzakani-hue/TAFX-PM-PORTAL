@@ -6,6 +6,7 @@ import Homework from './Homework.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron } from './Icons.jsx';
+import { PaymentConsent } from './Legal.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
@@ -14,6 +15,7 @@ const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join(
 function BillingNotice({ billing, user }) {
   const [paying, setPaying] = useState(false);
   const [payErr, setPayErr] = useState('');
+  const [consent, setConsent] = useState(false);
   if (!billing || !billing.active || billing.status === 'ok' || billing.status === 'none') return null;
   const due = billing.paid_until ? new Date(billing.paid_until).toLocaleDateString() : '';
   const overdue = billing.status === 'overdue';
@@ -22,7 +24,7 @@ function BillingNotice({ billing, user }) {
     try {
       const { url } = await paystackInit({ user_id: user.id, return_url: window.location.origin });
       window.location.href = url;
-    } catch (e) { setPayErr(e.message); setPaying(false); }
+    } catch (e) { setPayErr(e.message); setPaying(false); setConsent(false); }
   }
   return (
     <div style={{
@@ -41,9 +43,10 @@ function BillingNotice({ billing, user }) {
           {payErr && <span style={{ color: 'var(--red)' }}> {payErr}</span>}
         </div>
       </div>
-      <button className="btn" onClick={payNow} disabled={paying} style={{ flex: 'none' }}>
+      <button className="btn" onClick={() => setConsent(true)} disabled={paying} style={{ flex: 'none' }}>
         {paying ? 'Opening…' : `Pay R${billing.fee} now`}
       </button>
+      {consent && <PaymentConsent busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
     </div>
   );
 }
