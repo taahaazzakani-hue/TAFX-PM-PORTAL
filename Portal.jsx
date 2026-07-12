@@ -5,6 +5,7 @@ import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
+import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron } from './Icons.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
@@ -105,25 +106,27 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <div className={`overlay-menu ${navOpen ? 'show' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
         <div className="sb-head">
-          <img src={LOGO} alt="TA" />
-          <div className="sub">Private Mentorship</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src={LOGO} alt="TA" style={{ width: 34 }} />
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Portal</div>
+          </div>
         </div>
         <div className="sb-body">
-          <NavItem id="dashboard" icon="🏠" label="Dashboard" />
+          <NavItem id="dashboard" icon={<IcGrid />} label="Dashboard" />
           <div className="sb-section-label">Learning</div>
           {originalCourse && (
             <div className="nav-course">
               <div className={`row ${view === 'learn' && activeCourse === originalCourse.id ? 'active' : ''}`}
                 onClick={() => { setView('learn'); setActiveCourse(originalCourse.id); setActiveVideo(null); setNavOpen(false); }}>
-                📚 {originalCourse.title}
+                <IcBook /> {originalCourse.title}
                 <span className="prog-mini">{courseProgress(originalCourse.id)}%</span>
               </div>
             </div>
           )}
           <div className="nav-course">
             <div className="row" onClick={() => setPmOpen(!pmOpen)} style={{ fontWeight: 600 }}>
-              💎 Private Mentorship
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-faint)', transform: pmOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▶</span>
+              <IcGem /> Private Mentorship
+              <IcChevron open={pmOpen} />
             </div>
           </div>
           {pmOpen && (
@@ -140,12 +143,11 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               ))}
             </div>
           )}
-          <div className="sb-section-label">Practice</div>
-          <NavItem id="journal" icon="📓" label="Journal" />
-          <NavItem id="homework" icon="📝" label="Homework" />
-          <NavItem id="calculator" icon="🧮" label="Risk Calculator" />
+          <NavItem id="journal" icon={<IcJournal />} label="Journal" />
+          <NavItem id="homework" icon={<IcClipboard />} label="Homework" />
+          <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
           <div className="sb-section-label">Account</div>
-          <NavItem id="profile" icon="⚙️" label="Profile" />
+          <NavItem id="profile" icon={<IcUser />} label="Profile" />
         </div>
         <div className="sb-foot">
           <div className="user-chip">
@@ -191,11 +193,13 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
 }
 
 function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
+  const [q, setQ] = useState('');
   const totalLessons = (content.videos || []).filter((v) => courses.some((c) => c.id === v.course_id)).length;
   const firstName = (user.name || '').split(' ')[0];
   const billing = user.billing;
   const dueStr = billing?.paid_until ? new Date(billing.paid_until).toLocaleDateString() : null;
   const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
+  const shown = q.trim() ? courses.filter((c) => c.title.toLowerCase().includes(q.trim().toLowerCase())) : courses;
 
   return (
     <div>
@@ -203,6 +207,12 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
         <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
         <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
         <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
+        <IcSearch />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
+          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }} />
       </div>
 
       {billing?.active && (
@@ -217,11 +227,11 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
         </div>
       )}
 
-      {courses.length === 0 ? (
-        <div className="empty"><div className="big serif">Welcome</div><div>Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do.</div></div>
+      {shown.length === 0 ? (
+        <div className="empty"><div className="big serif">{q ? 'No matches' : 'Welcome'}</div><div>{q ? `No courses match “${q}”.` : "Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do."}</div></div>
       ) : (
         <div className="dash-grid">
-          {courses.map((c) => {
+          {shown.map((c) => {
             const pct = courseProgress(c.id);
             const n = lessonsIn(c.id);
             return (
