@@ -5,6 +5,18 @@ const ANON_KEY =
 
 const API = `${SUPABASE_URL}/functions/v1/pm-api`;
 
+// Start a Paystack checkout — returns { url } to redirect the student to
+export async function paystackInit(payload) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/pm-paystack`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY },
+    body: JSON.stringify({ action: 'init', ...payload }),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (!res.ok || d.error) throw new Error(d.error || 'Could not start the payment.');
+  return d;
+}
+
 export async function call(action, body = {}) {
   const res = await fetch(API, {
     method: 'POST',
