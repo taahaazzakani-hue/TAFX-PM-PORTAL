@@ -4,6 +4,7 @@ import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
+import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
 const LEVELS = [
@@ -11,27 +12,39 @@ const LEVELS = [
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
   { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
 ];
+// Courses manageable in the Content tab (TAFX Original is open to all clients,
+// so it is NOT an access level / homework level — content only).
+const CONTENT_COURSES = [
+  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
+  ...LEVELS,
+];
 
 export default function Admin({ user, onLogout, onUpdated }) {
-  const [tab, setTab] = useState('students');
+  const [tab, setTab] = useState('dashboard');
   const T = ({ id, icon, label }) => (
     <div className="nav-course"><div className={`row ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{icon} {label}</div></div>
   );
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="sb-head"><img src={LOGO} alt="TA" /><div className="sub">Admin Panel</div></div>
+        <div className="sb-head">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src={LOGO} alt="TA" style={{ width: 34 }} />
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Admin</div>
+          </div>
+        </div>
         <div className="sb-body">
+          <T id="dashboard" icon={<IcGrid />} label="Command Center" />
           <div className="sb-section-label">Manage</div>
-          <T id="students" icon="👥" label="Students" />
-          <T id="content" icon="🎬" label="Content" />
-          <T id="homework" icon="📝" label="Homework" />
-          <T id="journals" icon="📓" label="Journals" />
-          <T id="leaderboard" icon="🏆" label="Leaderboard" />
-          <T id="confluences" icon="🏷️" label="Confluences" />
-          <T id="overview" icon="📊" label="Overview" />
-          <T id="billing" icon="💳" label="Billing" />
-          <T id="profile" icon="⚙️" label="Profile" />
+          <T id="students" icon={<IcUsers />} label="Students" />
+          <T id="content" icon={<IcVideo />} label="Content" />
+          <T id="homework" icon={<IcClipboard />} label="Homework" />
+          <T id="journals" icon={<IcJournal />} label="Journals" />
+          <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />
+          <T id="confluences" icon={<IcTag />} label="Confluences" />
+          <T id="overview" icon={<IcChart />} label="Overview" />
+          <T id="billing" icon={<IcCard />} label="Billing" />
+          <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
         <div className="sb-foot">
           <div className="user-chip"><div className="avatar">TA</div><div className="meta"><div className="n">{user.name}</div><div className="e">Administrator</div></div></div>
@@ -39,8 +52,9 @@ export default function Admin({ user, onLogout, onUpdated }) {
         </div>
       </aside>
       <main className="main">
-        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab}</h2></div>
+        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab}</h2></div>
         <div className="content">
+          {tab === 'dashboard' && <AdminDashboard admin={user} goTo={setTab} />}
           {tab === 'students' && <Students admin={user} />}
           {tab === 'content' && <Content admin={user} />}
           {tab === 'homework' && <HomeworkAdmin admin={user} />}
@@ -52,6 +66,117 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
         </div>
       </main>
+    </div>
+  );
+}
+
+/* ---------- COMMAND CENTER DASHBOARD ---------- */
+const DASH_LEVELS = [
+  { id: 'pm_beginner', level: 'beginner', title: 'Beginner', dot: '#6fae7d' },
+  { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate', dot: '#1f5fbf' },
+  { id: 'pm_advanced', level: 'advanced', title: 'Advanced', dot: '#b06a9c' },
+];
+
+function AdminDashboard({ admin, goTo }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    Promise.all([call('admin_list_users', { admin_id: admin.id }), call('get_content')])
+      .then(([u, c]) => setData({ users: u.users || [], content: c }))
+      .catch(() => setData({ users: [], content: { videos: [] } }));
+  }, []);
+  if (!data) return <div className="spinner" />;
+
+  const students = data.users.filter((u) => u.role === 'student');
+  const pending = students.filter((u) => u.status === 'pending');
+  const approved = students.filter((u) => u.status === 'approved');
+  const overdue = students.filter((u) => u.billing && u.billing.status === 'overdue');
+  const dueSoon = students.filter((u) => u.billing && u.billing.status === 'due_soon');
+  const activeSubs = students.filter((u) => u.billing && u.billing.active && u.billing.status !== 'overdue');
+  const videos = data.content.videos || [];
+
+  const perCourse = DASH_LEVELS.map((L) => {
+    const enrolled = approved.filter((u) => (u.levels || []).includes(L.level));
+    const vids = videos.filter((v) => v.course_id === L.id);
+    let avg = 0;
+    if (enrolled.length && vids.length) {
+      const vidIds = new Set(vids.map((v) => v.id));
+      const sum = enrolled.reduce((acc, u) => acc + (u.watched_videos || []).filter((id) => vidIds.has(id)).length / vids.length, 0);
+      avg = Math.round((sum / enrolled.length) * 100);
+    }
+    return { ...L, count: enrolled.length, lessons: vids.length, avg };
+  });
+
+  const recent = [...students].filter((u) => u.last_login).sort((a, b) => Number(b.last_login) - Number(a.last_login)).slice(0, 5);
+  const newest = [...students].sort((a, b) => Number(b.created_at) - Number(a.created_at)).slice(0, 5);
+  const ago = (t) => { const m = Math.floor((Date.now() - Number(t)) / 60000); if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; return `${Math.floor(h / 24)}d ago`; };
+
+  return (
+    <div>
+      <div className="stat-row">
+        <div className="stat" style={{ cursor: 'pointer' }} onClick={() => goTo('students')}><div className="v">{students.length}</div><div className="l">Total students</div></div>
+        <div className="stat" style={{ cursor: 'pointer', borderColor: pending.length ? 'rgba(31,95,191,.5)' : undefined }} onClick={() => goTo('students')}><div className="v">{pending.length}</div><div className="l">Awaiting approval</div></div>
+        <div className="stat" style={{ cursor: 'pointer' }} onClick={() => goTo('billing')}><div className="v" style={{ color: 'var(--green)' }}>{activeSubs.length}</div><div className="l">Active subscriptions</div></div>
+        <div className="stat" style={{ cursor: 'pointer', borderColor: overdue.length ? 'rgba(192,71,63,.5)' : undefined }} onClick={() => goTo('billing')}><div className="v" style={{ color: overdue.length ? 'var(--red)' : undefined }}>{overdue.length}</div><div className="l">Overdue payments</div></div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>Students per course</h3>
+        <div className="hint" style={{ marginBottom: 14 }}>Approved students with access to each stage, and their average progress.</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+          {perCourse.map((c) => (
+            <div key={c.id} style={{ border: '1px solid var(--line)', borderRadius: 14, padding: '16px 18px', background: 'var(--bg-2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 14 }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: c.dot, flex: 'none' }} />{c.title}
+              </div>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 34, color: 'var(--gold-soft)', marginTop: 6 }}>{c.count}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>student{c.count !== 1 ? 's' : ''} · {c.lessons} lesson{c.lessons !== 1 ? 's' : ''}</div>
+              <div className="progress-bar" style={{ marginTop: 12 }}><span style={{ width: `${c.avg}%` }} /></div>
+              <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 5 }}>{c.avg}% avg progress</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {(pending.length > 0 || dueSoon.length > 0) && (
+        <div className="card" style={{ borderColor: 'rgba(31,95,191,.35)' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 4px' }}>Needs your attention</h3>
+          <div className="hint" style={{ marginBottom: 12 }}>Things to action today.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pending.map((u) => (
+              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--panel-2)', fontSize: 13 }}>
+                <span>🆕</span><div><b>{u.name}</b> registered {ago(u.created_at)} · {u.email}</div>
+                <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={() => goTo('students')}>Review →</button>
+              </div>
+            ))}
+            {dueSoon.map((u) => (
+              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--panel-2)', fontSize: 13 }}>
+                <span>💳</span><div><b>{u.name}</b>'s subscription is due in {u.billing.daysLeft} day{u.billing.daysLeft !== 1 ? 's' : ''}</div>
+                <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={() => goTo('billing')}>Billing →</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Recently active</h3>
+          {recent.length === 0 ? <div className="hint">No logins yet.</div> : recent.map((u) => (
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+              <span style={{ fontWeight: 600 }}>{u.name}</span><span style={{ color: 'var(--ink-faint)' }}>{ago(u.last_login)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 12px' }}>Newest students</h3>
+          {newest.length === 0 ? <div className="hint">No students yet.</div> : newest.map((u) => (
+            <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+              <span style={{ fontWeight: 600 }}>{u.name} <span className={`status-tag s-${u.status}`} style={{ marginLeft: 6 }}>{u.status}</span></span>
+              <span style={{ color: 'var(--ink-faint)' }}>{ago(u.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -239,7 +364,7 @@ function Content({ admin }) {
 
   return (
     <div>
-      <div className="admin-tabs">{LEVELS.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
+      <div className="admin-tabs">{CONTENT_COURSES.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
