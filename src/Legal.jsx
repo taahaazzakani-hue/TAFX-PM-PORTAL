@@ -20,7 +20,7 @@ const CONTENT = {
           We are not a licensed financial services provider, broker, or fund manager. We do not accept, hold, manage or invest client funds. We do not execute trades on behalf of any student, and we do not sell trade signals. Any trading decision you make is entirely your own, made with your own capital, at your own broker, at your own risk.
         </S>
         <S t="Trading involves substantial risk">
-          Trading foreign exchange and other leveraged products carries a high level of risk and is not suitable for everyone. You can lose some or all of your invested capital; never trade with money you cannot afford to lose. Past performance — whether of markets, mentors or other students — is not indicative of future results, and no outcome or profit is guaranteed or implied.
+          Trading foreign exchange and other leveraged products carries a high level of risk and is not suitable for everyone. <b>The majority of retail traders lose money.</b> You can lose some or all of your invested capital; never trade with money you cannot afford to lose. Past performance — whether of markets, mentors or other students — is not indicative of future results, and <b>no outcome, income or profit is guaranteed or implied</b>. All outcomes depend entirely on your own decisions, discipline and market conditions.
         </S>
         <S t="Personal responsibility">
           Before trading, consider your objectives, financial situation and experience, and if necessary seek advice from an independent, licensed financial adviser. By using this platform you accept full responsibility for your own decisions and outcomes.
@@ -33,7 +33,7 @@ const CONTENT = {
     body: (
       <>
         <S t="1. The service">
-          TA Forex Institute ("we", "us") operates this private mentorship portal, which provides subscription access to educational video courses, mentorship feedback, homework and journaling tools ("the Service"). The Service is educational only — see our Risk Disclaimer, which forms part of these terms.
+          TA Forex Institute ("we", "us") operates this private mentorship portal, which provides subscription access to educational video courses, mentorship feedback, homework and journaling tools ("the Service"). The Service is <b>educational only</b>: mentorship is teaching and feedback on your learning — it is <b>not</b> trade signals, not account management, not portfolio management, and not financial advice. <b>No results, profits or income are guaranteed.</b> Our Risk Disclaimer forms part of these terms.
         </S>
         <S t="2. Accounts">
           You must provide accurate registration details and keep your login credentials confidential. Accounts are personal: one account per student, for use on one device at a time, and access may not be shared, resold or redistributed. We may approve, decline, suspend or terminate accounts to protect the integrity of the Service, including for non-payment or sharing of content.
@@ -42,7 +42,7 @@ const CONTENT = {
           Access to the Private Mentorship is billed at R830 per month, payable in advance. Where online payments are enabled, your subscription renews automatically each month until cancelled. If a payment is not received by its due date, access is paused until the account is settled.
         </S>
         <S t="4. Cancellation">
-          You may cancel at any time by notifying your mentor or through your payment provider. Cancellation stops future billing; your access continues until the end of the period you have already paid for. Our Refund Policy governs refunds.
+          You may cancel at any time: message your mentor through the portal, email the contact address provided at sign-up, or cancel the subscription directly from your PayFast payment confirmation. Cancellation stops future billing; your access continues until the end of the period you have already paid for, after which it stops. Our Refund Policy governs refunds.
         </S>
         <S t="5. Intellectual property">
           All course videos, documents, materials and platform content are our intellectual property (or licensed to us) and are provided for your personal, non-commercial use only. Downloading, recording, copying, publishing or sharing any content outside the platform is prohibited and grounds for immediate termination without refund.
@@ -94,6 +94,46 @@ export function LegalPage({ page }) {
           {Object.keys(CONTENT).filter((k) => k !== page).map((k) => (
             <a key={k} href={`?page=${k}`} style={{ color: 'var(--ink-faint)', fontSize: 13 }}>{CONTENT[k].title}</a>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PaymentConsent({ onConfirm, onClose, busy }) {
+  const [agreed, setAgreed] = React.useState(false);
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,30,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 18, maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px 28px 22px', boxShadow: 'var(--shadow-lg)' }}>
+        <h2 style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Before you pay — please read</h2>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 16 }}>Private Mentorship subscription · R830 per month</div>
+
+        <div style={{ background: 'rgba(192,71,63,.07)', border: '1px solid rgba(192,71,63,.3)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>⚠️ Risk warning</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            Trading involves significant risk and <b>the majority of retail traders lose money</b>. This is an <b>educational service only</b> — not financial advice, not trade signals, and not account management. No results or income are guaranteed; all outcomes depend on your own decisions.
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>Your subscription</div>
+          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.7 }}>
+            • <b>R830</b> billed now, then automatically every month until you cancel.<br />
+            • Cancel anytime — message your mentor or cancel via PayFast; billing stops and access continues to the end of the paid period.<br />
+            • Monthly renewals are non-refundable; first-payment refund requests within 7 days are reviewed per our <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>.
+          </div>
+        </div>
+
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--ink-soft)', cursor: 'pointer', marginBottom: 18 }}>
+          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>
+            I have read and agree to the <a href="?page=terms" target="_blank" style={{ color: 'var(--gold-soft)' }}>Terms of Service</a>, <a href="?page=disclaimer" target="_blank" style={{ color: 'var(--gold-soft)' }}>Risk Disclaimer</a> and <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>, and I understand this is education only with no guaranteed results.
+          </span>
+        </label>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn" onClick={onConfirm} disabled={!agreed || busy}>{busy ? 'Opening secure checkout…' : 'Agree & continue to payment'}</button>
         </div>
       </div>
     </div>
