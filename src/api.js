@@ -5,9 +5,9 @@ const ANON_KEY =
 
 const API = `${SUPABASE_URL}/functions/v1/pm-api`;
 
-// Start a Paystack checkout — returns { url } to redirect the student to
+// Start a PayFast checkout — returns { url } to redirect the student to
 export async function paystackInit(payload) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/pm-paystack`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/pm-payfast`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY },
     body: JSON.stringify({ action: 'init', ...payload }),
