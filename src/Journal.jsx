@@ -666,6 +666,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           <div className="card" style={{ margin: 0, background: 'rgba(31,95,191,.06)', border: '1px solid rgba(31,95,191,.25)' }}>
             <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginBottom: 4 }}>💬 Mentor feedback</div>
             <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{entry.admin_comment}</div>
+            {entry.admin_comment_by && <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 6, fontWeight: 600 }}>— {entry.admin_comment_by}, Mentor</div>}
           </div>
         ) : null}
         <div className="modal-actions" style={{ marginTop: 16 }}><button className="btn ghost" onClick={onClose}>Close</button></div>
