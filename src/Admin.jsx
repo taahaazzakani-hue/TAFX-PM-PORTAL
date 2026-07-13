@@ -7,16 +7,27 @@ import ImageGallery from './ImageGallery.jsx';
 import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
+// Levels a client can be approved/assigned. Order = display order in pickers.
 const LEVELS = [
+  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
+  { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
+  { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
+  { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
+  { id: 'pm_1v1', level: '1v1', title: '1v1' },
+];
+// Courses manageable in the Content tab. 1v1 is journal-only (no content),
+// so it is NOT listed here. TAFX Original IS a content course.
+const CONTENT_COURSES = [
+  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
   { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
 ];
-// Courses manageable in the Content tab (TAFX Original is open to all clients,
-// so it is NOT an access level / homework level — content only).
-const CONTENT_COURSES = [
-  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
-  ...LEVELS,
+// Levels that have homework (journaling levels except 1v1 which is journal-only mentorship).
+const HOMEWORK_LEVELS = [
+  { level: 'beginner', title: 'Beginner' },
+  { level: 'intermediate', title: 'Intermediate' },
+  { level: 'advanced', title: 'Advanced' },
 ];
 
 export default function Admin({ user, onLogout, onUpdated }) {
@@ -258,7 +269,7 @@ function Students({ admin }) {
 }
 
 function ApproveModal({ user, onClose, onConfirm, scoped }) {
-  const [levels, setLevels] = useState(scoped ? ['advanced'] : (user.levels?.length ? user.levels : ['beginner']));
+  const [levels, setLevels] = useState(scoped ? ['advanced'] : (user.levels?.length ? user.levels : ['original']));
   const toggle = (lv) => { if (scoped) return; setLevels(levels.includes(lv) ? levels.filter((x) => x !== lv) : [...levels, lv]); };
   return (
     <div className="modal-back" onClick={onClose}>
@@ -507,7 +518,7 @@ function ResourceModal({ data, sections, onSave, onClose }) {
 /* ---------- HOMEWORK ADMIN ---------- */
 function HomeworkAdmin({ admin }) {
   const hwScoped = admin.admin_scope === 'advanced';
-  const hwLevels = hwScoped ? LEVELS.filter((l) => l.level === 'advanced') : LEVELS;
+  const hwLevels = hwScoped ? HOMEWORK_LEVELS.filter((l) => l.level === 'advanced') : HOMEWORK_LEVELS;
   const [level, setLevel] = useState(hwScoped ? 'advanced' : 'beginner');
   const [modal, setModal] = useState(null);
   const [subs, setSubs] = useState(null);
