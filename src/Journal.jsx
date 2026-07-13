@@ -3,7 +3,7 @@ import { call, uploadImage } from './api.js';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
 
-const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', '1v1': '1v1' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // Client-side stats (mirrors backend computeStats) so we can recompute for a filtered set of entries.
@@ -64,17 +64,19 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   if (!myLevels.length && !readOnly) return <div className="empty"><div className="big serif">No level access yet</div><div>Your mentor hasn't assigned you a stage. Once they do, your journal unlocks.</div></div>;
   if (!data) return <div className="spinner" />;
 
-  const levelsToShow = readOnly ? ['beginner', 'intermediate', 'advanced'] : myLevels;
-  const allLevelEntries = data.entries.filter((e) => e.level === level);
+  const JOURNAL_LEVELS = ['beginner', 'intermediate', 'advanced', '1v1'];
+  const levelsToShow = readOnly ? JOURNAL_LEVELS : myLevels.filter((l) => JOURNAL_LEVELS.includes(l));
+  const activeLevel = levelsToShow.includes(level) ? level : (levelsToShow[0] || 'beginner');
+  const allLevelEntries = data.entries.filter((e) => e.level === activeLevel);
   // Filter by trade type. Entries saved before this feature default to 'live'.
   const entries = typeFilter === 'all' ? allLevelEntries : allLevelEntries.filter((e) => (e.trade_type || 'live') === typeFilter);
   // Recompute stats for the filtered set (backend stats cover all types together).
-  const stats = typeFilter === 'all' ? (data.stats[level] || computeStats(allLevelEntries)) : computeStats(entries);
+  const stats = typeFilter === 'all' ? (data.stats[activeLevel] || computeStats(allLevelEntries)) : computeStats(entries);
   const ql = q.trim().toLowerCase();
   const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || []), ...(e.tags || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
 
   async function saveEntry(entry) {
-    await call('journal_save', { user_id: user.id, entry: { ...entry, level } });
+    await call('journal_save', { user_id: user.id, entry: { ...entry, level: activeLevel } });
     setShowForm(false); setEditing(null); load();
   }
   async function delEntry(id) {
@@ -85,7 +87,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   return (
     <div>
       <div className="admin-tabs">
-        {levelsToShow.map((lv) => (<button key={lv} className={level === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
+        {levelsToShow.map((lv) => (<button key={lv} className={activeLevel === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
       </div>
 
       {/* Journal / Analytics sub-tabs */}
