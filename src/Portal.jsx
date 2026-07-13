@@ -64,7 +64,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   useEffect(() => {
     call('get_content').then((d) => {
       setContent(d);
-      const accessible = (d.courses || []).filter((c) => c.level === 'original' || (user.levels || []).includes(c.level));
+      const accessible = (d.courses || []).filter((c) => (user.levels || []).includes(c.level));
       setActiveCourse((accessible[0] || d.courses?.[0])?.id || null);
     }).catch(() => setContent({ courses: [], sections: [], videos: [], resources: [], confluences: [] }));
     refreshMe(user.id).then((u) => { if (u) { const merged = { ...user, ...u }; setUser(merged); saveSession(merged); } });
@@ -100,9 +100,11 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   if (!content) return <div className="center-load"><div className="spinner" /></div>;
 
   const myLevels = user.levels || [];
-  const courses = (content.courses || []).filter((c) => c.level === 'original' || myLevels.includes(c.level));
+  const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
   const originalCourse = courses.find((c) => c.level === 'original');
   const pmCourses = courses.filter((c) => c.level !== 'original');
+  const hasJournal = ['beginner', 'intermediate', 'advanced', '1v1'].some((l) => myLevels.includes(l));
+  const hasHomework = ['beginner', 'intermediate', 'advanced'].some((l) => myLevels.includes(l));
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
   const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
   const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
@@ -162,8 +164,8 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               ))}
             </div>
           )}
-          <NavItem id="journal" icon={<IcJournal />} label="Journal" />
-          <NavItem id="homework" icon={<IcClipboard />} label="Homework" />
+          {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
+          {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
           <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
           <div className="sb-section-label">Account</div>
           <NavItem id="profile" icon={<IcUser />} label="Profile" />
@@ -192,7 +194,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
             <PMHome courses={pmCourses} content={content} courseProgress={courseProgress}
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
-          {view === 'journal' && <Journal user={user} confluences={content.confluences} />}
+          {view === 'journal' && hasJournal && <Journal user={user} confluences={content.confluences} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
           {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
