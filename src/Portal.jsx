@@ -1,158 +1,464 @@
-import React from 'react';
-import { LOGO } from './assets.js';
+import React, { useEffect, useState } from 'react';
+import { call, saveSession, refreshMe, paystackInit } from './api.js';
+import { LOGO, TEACH1, TEACH2, TEACH3, TEACH4 } from './assets.js';
+import Journal from './Journal.jsx';
+import Homework from './Homework.jsx';
+import Profile from './Profile.jsx';
+import RiskCalculator from './RiskCalculator.jsx';
+import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron } from './Icons.jsx';
+import { PaymentConsent } from './Legal.jsx';
 
-const S = ({ t, children }) => (
-  <div style={{ marginBottom: 22 }}>
-    <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t}</h2>
-    <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.65 }}>{children}</div>
-  </div>
-);
+const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
+const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
+const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
-const CONTENT = {
-  disclaimer: {
-    title: 'Risk Disclaimer',
-    body: (
-      <>
-        <S t="Educational content only">
-          TA Forex Institute provides <b>educational content only</b> — video courses, mentorship, homework and journaling tools intended to teach concepts related to trading. Nothing on this platform constitutes financial, investment, legal or tax advice, and nothing should be interpreted as a recommendation to buy, sell or hold any financial instrument.
-        </S>
-        <S t="Not a financial services provider">
-          We are not a licensed financial services provider, broker, or fund manager. We do not accept, hold, manage or invest client funds. We do not execute trades on behalf of any student, and we do not sell trade signals. Any trading decision you make is entirely your own, made with your own capital, at your own broker, at your own risk.
-        </S>
-        <S t="Trading involves substantial risk">
-          Trading foreign exchange and other leveraged products carries a high level of risk and is not suitable for everyone. <b>The majority of retail traders lose money.</b> You can lose some or all of your invested capital; never trade with money you cannot afford to lose. Past performance — whether of markets, mentors or other students — is not indicative of future results, and <b>no outcome, income or profit is guaranteed or implied</b>. All outcomes depend entirely on your own decisions, discipline and market conditions.
-        </S>
-        <S t="Personal responsibility">
-          Before trading, consider your objectives, financial situation and experience, and if necessary seek advice from an independent, licensed financial adviser. By using this platform you accept full responsibility for your own decisions and outcomes.
-        </S>
-      </>
-    ),
-  },
-  terms: {
-    title: 'Terms of Service',
-    body: (
-      <>
-        <S t="1. The service">
-          TA Forex Institute ("we", "us") operates this private mentorship portal, which provides subscription access to educational video courses, mentorship feedback, homework and journaling tools ("the Service"). The Service is <b>educational only</b>: mentorship is teaching and feedback on your learning — it is <b>not</b> trade signals, not account management, not portfolio management, and not financial advice. <b>No results, profits or income are guaranteed.</b> Our Risk Disclaimer forms part of these terms.
-        </S>
-        <S t="2. Accounts">
-          You must provide accurate registration details and keep your login credentials confidential. Accounts are personal: one account per student, for use on one device at a time, and access may not be shared, resold or redistributed. We may approve, decline, suspend or terminate accounts to protect the integrity of the Service, including for non-payment or sharing of content.
-        </S>
-        <S t="3. Subscription and billing">
-          Access to the Private Mentorship is billed at R830 per month, payable in advance. Where online payments are enabled, your subscription renews automatically each month until cancelled. If a payment is not received by its due date, access is paused until the account is settled.
-        </S>
-        <S t="4. Cancellation">
-          You may cancel at any time: message your mentor through the portal, email the contact address provided at sign-up, or cancel the subscription directly from your PayFast payment confirmation. Cancellation stops future billing; your access continues until the end of the period you have already paid for, after which it stops. Our Refund Policy governs refunds.
-        </S>
-        <S t="5. Intellectual property">
-          All course videos, documents, materials and platform content are our intellectual property (or licensed to us) and are provided for your personal, non-commercial use only. Downloading, recording, copying, publishing or sharing any content outside the platform is prohibited and grounds for immediate termination without refund.
-        </S>
-        <S t="6. No advice; limitation of liability">
-          We provide education, not advice. To the maximum extent permitted by law, we are not liable for any trading losses, loss of profit, or indirect or consequential loss arising from your use of the Service or from decisions you make. Our total liability for any claim is limited to the subscription fees you paid in the three months preceding the claim. Nothing in these terms limits rights you have under the Consumer Protection Act that cannot lawfully be limited.
-        </S>
-        <S t="7. General">
-          These terms are governed by the laws of the Republic of South Africa. We may update these terms from time to time; continued use of the Service after an update constitutes acceptance. For questions, contact your mentor through the portal.
-        </S>
-      </>
-    ),
-  },
-  refunds: {
-    title: 'Refund Policy',
-    body: (
-      <>
-        <S t="Digital subscription">
-          The Private Mentorship is a digital subscription service. Because access to all course content is provided immediately on payment, subscription fees are generally non-refundable once a billing period has begun.
-        </S>
-        <S t="First-time subscribers">
-          If you are a new student and the Service is not what you expected, contact us within 7 days of your first payment and before completing a substantial portion of the content, and we will review your request for a refund of that first payment in good faith.
-        </S>
-        <S t="Renewals and cancellation">
-          Monthly renewals are not refundable. To avoid being charged for a month you don't want, cancel before your renewal date — cancellation is effective from the next billing cycle and you keep access until the end of the period you've paid for. If you believe you were billed in error (for example a duplicate charge), contact us and verified billing errors will be refunded in full.
-        </S>
-        <S t="How to request">
-          Send your request, with the email address on your account and the payment reference, to your mentor via the portal or the contact details provided at sign-up. Approved refunds are returned to the original payment method within 7–14 business days.
-        </S>
-      </>
-    ),
-  },
-};
-
-export function LegalPage({ page }) {
-  const c = CONTENT[page] || CONTENT.disclaimer;
+function PlanNotice({ track, plan, user }) {
+  const [paying, setPaying] = useState(false);
+  const [payErr, setPayErr] = useState('');
+  const [consent, setConsent] = useState(false);
+  if (!track || !track.active || track.status === 'ok' || track.status === 'none') return null;
+  const label = plan === '1v1' ? '1v1 mentorship' : 'private mentorship';
+  const fee = track.fee || (plan === '1v1' ? 2075 : 830);
+  const due = track.paid_until ? new Date(track.paid_until).toLocaleDateString() : '';
+  const overdue = track.status === 'overdue';
+  async function payNow() {
+    setPaying(true); setPayErr('');
+    try {
+      const { url } = await paystackInit({ user_id: user.id, plan, return_url: window.location.origin });
+      window.location.href = url;
+    } catch (e) { setPayErr(e.message); setPaying(false); setConsent(false); }
+  }
   return (
-    <div style={{ minHeight: '100vh', padding: '48px 20px' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow)', padding: '40px 42px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 26 }}>
-          <img src={LOGO} alt="TA" style={{ width: 56 }} />
-          <div style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', color: 'var(--gold-soft)', marginTop: 8 }}>TA Forex Institute</div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, marginTop: 12 }}>{c.title}</h1>
-          <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>Last updated: July 2026</div>
+    <div style={{
+      borderRadius: 10, padding: '14px 18px', marginBottom: 12,
+      background: overdue ? 'rgba(192,71,63,.1)' : 'rgba(31,95,191,.08)',
+      border: `1px solid ${overdue ? 'rgba(192,71,63,.4)' : 'rgba(31,95,191,.3)'}`,
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'
+    }}>
+      <span style={{ fontSize: 20 }}>{overdue ? '\u26A0\uFE0F' : '\uD83D\uDD14'}</span>
+      <div style={{ flex: 1, minWidth: 200 }}>
+        <div style={{ fontWeight: 600, color: overdue ? 'var(--red)' : 'var(--ink)' }}>
+          {plan === '1v1' ? '1v1' : 'PM'} {overdue ? 'subscription overdue' : `subscription due ${track.daysLeft === 0 ? 'today' : `in ${track.daysLeft} day${track.daysLeft > 1 ? 's' : ''}`}`}
         </div>
-        {c.body}
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 30, flexWrap: 'wrap' }}>
-          <a href="/" style={{ color: 'var(--gold-soft)', fontSize: 13, fontWeight: 600 }}>← Back to portal</a>
-          {Object.keys(CONTENT).filter((k) => k !== page).map((k) => (
-            <a key={k} href={`?page=${k}`} style={{ color: 'var(--ink-faint)', fontSize: 13 }}>{CONTENT[k].title}</a>
-          ))}
+        <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+          Your R{fee} monthly {label} subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`}
+          {payErr && <span style={{ color: 'var(--red)' }}> {payErr}</span>}
         </div>
       </div>
+      <button className="btn" onClick={() => setConsent(true)} disabled={paying} style={{ flex: 'none' }}>
+        {paying ? 'Opening…' : `Pay R${fee} now`}
+      </button>
+      {consent && <PaymentConsent plan={plan} fee={fee} busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
     </div>
   );
 }
 
-export function PaymentConsent({ onConfirm, onClose, busy, plan = 'pm', fee }) {
-  const [agreed, setAgreed] = React.useState(false);
-  const planName = plan === '1v1' ? '1v1 Mentorship' : 'Private Mentorship';
-  const amount = fee || (plan === '1v1' ? 2075 : 830);
+function BillingNotice({ billing, user }) {
+  if (!billing) return null;
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,30,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 18, maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px 28px 22px', boxShadow: 'var(--shadow-lg)' }}>
-        <h2 style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Before you pay — please read</h2>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 16 }}>{planName} subscription · R{amount} per month</div>
+    <>
+      <PlanNotice track={billing.pm} plan="pm" user={user} />
+      <PlanNotice track={billing.v1v1} plan="1v1" user={user} />
+    </>
+  );
+}
 
-        <div style={{ background: 'rgba(192,71,63,.07)', border: '1px solid rgba(192,71,63,.3)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>⚠️ Risk warning</div>
-          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-            Trading involves significant risk and <b>the majority of retail traders lose money</b>. This is an <b>educational service only</b> — not financial advice, not trade signals, and not account management. No results or income are guaranteed; all outcomes depend on your own decisions.
+export default function Portal({ user: initialUser, onLogout, onUpdated }) {
+  const [user, setUser] = useState(initialUser);
+  const [content, setContent] = useState(null);
+  const [view, setView] = useState('dashboard');
+  const [activeCourse, setActiveCourse] = useState(null);
+  const [activeVideo, setActiveVideo] = useState(null);
+  const [watched, setWatched] = useState(new Set(initialUser.watched_videos || []));
+  const [navOpen, setNavOpen] = useState(false);
+  const [pmOpen, setPmOpen] = useState(true);
+
+  useEffect(() => {
+    call('get_content').then((d) => {
+      setContent(d);
+      const accessible = (d.courses || []).filter((c) => (user.levels || []).includes(c.level));
+      setActiveCourse((accessible[0] || d.courses?.[0])?.id || null);
+    }).catch(() => setContent({ courses: [], sections: [], videos: [], resources: [], confluences: [] }));
+    refreshMe(user.id).then((u) => { if (u) { const merged = { ...user, ...u }; setUser(merged); saveSession(merged); } });
+
+    // One-device enforcement: poll to see if another device took over this account.
+    const checkSession = async () => {
+      try {
+        const r = await call('session_check', { user_id: user.id, session_token: user.session_token });
+        if (r && r.valid === false) {
+          const msg = r.reason === 'another_device'
+            ? 'You have been signed out because your account was opened on another device. Only one device can be signed in at a time.'
+            : 'Your session has ended. Please sign in again.';
+          alert(msg);
+          onLogout();
+        }
+      } catch {}
+    };
+    const iv = setInterval(checkSession, 20000); // every 20s
+    const onFocus = () => checkSession();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(iv); window.removeEventListener('focus', onFocus); };
+  }, []);
+
+  async function toggleWatched(videoId) {
+    const isDone = watched.has(videoId);
+    const next = new Set(watched);
+    isDone ? next.delete(videoId) : next.add(videoId);
+    setWatched(next);
+    saveSession({ ...user, watched_videos: Array.from(next) });
+    try { await call(isDone ? 'unprogress' : 'progress', { user_id: user.id, video_id: videoId }); } catch {}
+  }
+
+  if (!content) return <div className="center-load"><div className="spinner" /></div>;
+
+  const myLevels = user.levels || [];
+  const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
+  const originalCourse = courses.find((c) => c.level === 'original');
+  const pmCourses = courses.filter((c) => c.level !== 'original');
+  const hasJournal = ['beginner', 'intermediate', 'advanced', '1v1'].some((l) => myLevels.includes(l));
+  const hasHomework = ['beginner', 'intermediate', 'advanced'].some((l) => myLevels.includes(l));
+  const course = courses.find((c) => c.id === activeCourse) || courses[0];
+  const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
+  const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
+
+  const courseProgress = (cid) => {
+    const vids = (content.videos || []).filter((v) => v.course_id === cid);
+    if (!vids.length) return 0;
+    return Math.round((vids.filter((v) => watched.has(v.id)).length / vids.length) * 100);
+  };
+
+  const NavItem = ({ id, icon, label }) => (
+    <div className="nav-course"><div className={`row ${view === id ? 'active' : ''}`} onClick={() => { setView(id); setActiveVideo(null); setNavOpen(false); }}>{icon} {label}</div></div>
+  );
+
+  return (
+    <div className="shell">
+      <div className={`overlay-menu ${navOpen ? 'show' : ''}`} onClick={() => setNavOpen(false)} />
+      <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
+        <div className="sb-head">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src={LOGO} alt="TA" style={{ width: 34 }} />
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Portal</div>
           </div>
         </div>
-
-        <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>Your subscription</div>
-          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.7 }}>
-            • <b>R{amount}</b> billed now, then automatically every month until you cancel.<br />
-            • Cancel anytime — message your mentor or cancel via PayFast; billing stops and access continues to the end of the paid period.<br />
-            • Monthly renewals are non-refundable; first-payment refund requests within 7 days are reviewed per our <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>.
+        <div className="sb-body">
+          <NavItem id="dashboard" icon={<IcGrid />} label="Dashboard" />
+          <div className="sb-section-label">Learning</div>
+          {originalCourse && (
+            <div className="nav-course">
+              <div className={`row ${view === 'learn' && activeCourse === originalCourse.id ? 'active' : ''}`}
+                onClick={() => { setView('learn'); setActiveCourse(originalCourse.id); setActiveVideo(null); setNavOpen(false); }}>
+                <IcBook /> {originalCourse.title}
+                <span className="prog-mini">{courseProgress(originalCourse.id)}%</span>
+              </div>
+            </div>
+          )}
+          <div className="nav-course">
+            <div className={`row ${view === 'pm' ? 'active' : ''}`} style={{ fontWeight: 600 }}
+              onClick={() => { setView('pm'); setPmOpen(true); setActiveVideo(null); setNavOpen(false); }}>
+              <IcGem /> Private Mentorship
+              <span onClick={(e) => { e.stopPropagation(); setPmOpen(!pmOpen); }} style={{ marginLeft: 'auto', display: 'flex', padding: '2px 4px' }}>
+                <IcChevron open={pmOpen} />
+              </span>
+            </div>
           </div>
+          {pmOpen && (
+            <div style={{ marginLeft: 14, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
+              {pmCourses.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
+              {pmCourses.map((c) => (
+                <div key={c.id} className="nav-course">
+                  <div className={`row ${view === 'learn' && activeCourse === c.id ? 'active' : ''}`}
+                    onClick={() => { setView('learn'); setActiveCourse(c.id); setActiveVideo(null); setNavOpen(false); }}>
+                    <span className={`stage-dot dot-${c.level}`} />{c.title}
+                    <span className="prog-mini">{courseProgress(c.id)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
+          {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
+          <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
+          <div className="sb-section-label">Account</div>
+          <NavItem id="profile" icon={<IcUser />} label="Profile" />
         </div>
+        <div className="sb-foot">
+          <div className="user-chip">
+            <div className="avatar">{user.avatar_url ? <img src={user.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} /> : initials(user.name)}</div>
+            <div className="meta"><div className="n">{user.name}</div><div className="e">{user.email}</div></div>
+          </div>
+          <button className="btn ghost" style={{ marginTop: 8 }} onClick={onLogout}>Sign out</button>
+        </div>
+      </aside>
 
-        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--ink-soft)', cursor: 'pointer', marginBottom: 18 }}>
-          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: 3 }} />
-          <span>
-            I have read and agree to the <a href="?page=terms" target="_blank" style={{ color: 'var(--gold-soft)' }}>Terms of Service</a>, <a href="?page=disclaimer" target="_blank" style={{ color: 'var(--gold-soft)' }}>Risk Disclaimer</a> and <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>, and I understand this is education only with no guaranteed results.
+      <main className="main">
+        <div className="topbar">
+          <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : 'Profile'}</h2>
+        </div>
+        <div className="content">
+          <BillingNotice billing={user.billing} user={user} />
+          {view === 'dashboard' && (
+            <Dashboard user={user} courses={courses} content={content} courseProgress={courseProgress}
+              onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
+          )}
+          {view === 'pm' && (
+            <PMHome courses={pmCourses} content={content} courseProgress={courseProgress}
+              onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
+          )}
+          {view === 'journal' && hasJournal && <Journal user={user} confluences={content.confluences} />}
+          {view === 'homework' && <Homework user={user} />}
+          {view === 'calculator' && <RiskCalculator />}
+          {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
+          {view === 'learn' && (
+            courses.length === 0 ? (
+              <div className="empty"><div className="big serif">Welcome</div><div>Your mentor hasn't assigned a stage to your account yet. You'll see your courses here once they do.</div></div>
+            ) : activeVideo ? (
+              <VideoView video={activeVideo}
+                resources={(content.resources || []).filter((r) => r.section_id === activeVideo.section_id)}
+                done={watched.has(activeVideo.id)} onBack={() => setActiveVideo(null)} onToggle={() => toggleWatched(activeVideo.id)} />
+            ) : (
+              <CourseView course={course} sections={courseSections} videos={courseVideos}
+                resources={(content.resources || []).filter((r) => r.course_id === course?.id)}
+                watched={watched} progress={courseProgress(course?.id)} onOpen={setActiveVideo} />
+            )
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function PMHome({ courses, content, courseProgress, onOpenCourse }) {
+  const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
+  return (
+    <div>
+      <div className="hero-card">
+        <div className="eyebrow">TA Forex Institute</div>
+        <h1>Private Mentorship</h1>
+        <div className="meta">Your guided path through the stages — {courses.length} level{courses.length !== 1 ? 's' : ''} unlocked · mentored by Taaha Azzakani</div>
+      </div>
+      {courses.length === 0 ? (
+        <div className="empty"><div className="big serif">No stages yet</div><div>Your mentor hasn't assigned a mentorship stage to your account yet. Your levels will appear here once they do.</div></div>
+      ) : (
+        <div className="dash-grid">
+          {courses.map((c) => {
+            const pct = courseProgress(c.id);
+            const n = lessonsIn(c.id);
+            return (
+              <div className="course-card" key={c.id} onClick={() => onOpenCourse(c.id)}>
+                <div className="cover">
+                  <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
+                  <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+                </div>
+                <div className="body">
+                  <div className="ct">{c.title}</div>
+                  <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="foot">
+                    <span className="pct">{pct}% complete</span>
+                    <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
+  const [q, setQ] = useState('');
+  const totalLessons = (content.videos || []).filter((v) => courses.some((c) => c.id === v.course_id)).length;
+  const firstName = (user.name || '').split(' ')[0];
+  const billing = user.billing;
+  const dueStr = billing?.paid_until ? new Date(billing.paid_until).toLocaleDateString() : null;
+  const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
+  const shown = q.trim() ? courses.filter((c) => c.title.toLowerCase().includes(q.trim().toLowerCase())) : courses;
+
+  return (
+    <div>
+      <div className="hero-card">
+        <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
+        <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
+        <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
+        <IcSearch />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
+          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }} />
+      </div>
+
+      {billing?.active && (
+        <div className="strip-banner">
+          <span className="tag">Private Mentorship</span>
+          <span className="item">💎 Exclusive curriculum</span>
+          <span className="item">🎯 1-on-1 mentor feedback</span>
+          <span className="sp" />
+          <span className="item" style={{ fontWeight: 600, color: billing.status === 'overdue' ? 'var(--red)' : 'var(--ink)' }}>
+            {billing.status === 'overdue' ? 'Payment overdue' : dueStr ? `Next payment · ${dueStr}` : `R${billing.fee}/month`}
           </span>
-        </label>
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="btn" onClick={onConfirm} disabled={!agreed || busy}>{busy ? 'Opening secure checkout…' : 'Agree & continue to payment'}</button>
         </div>
-      </div>
+      )}
+
+      {shown.length === 0 ? (
+        <div className="empty"><div className="big serif">{q ? 'No matches' : 'Welcome'}</div><div>{q ? `No courses match “${q}”.` : "Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do."}</div></div>
+      ) : (
+        <div className="dash-grid">
+          {shown.map((c) => {
+            const pct = courseProgress(c.id);
+            const n = lessonsIn(c.id);
+            return (
+              <div className="course-card" key={c.id} onClick={() => onOpenCourse(c.id)}>
+                <div className="cover">
+                  <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
+                  <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+                </div>
+                <div className="body">
+                  <div className="ct">{c.title}</div>
+                  <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="foot">
+                    <span className="pct">{pct}% complete</span>
+                    <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-export function LegalFooter() {
+function CourseView({ course, sections, videos, resources, watched, progress, onOpen }) {
+  const [open, setOpen] = useState({});
+  const topLevel = (sections || []).filter((s) => !s.parent_id);
+  useEffect(() => { if (topLevel.length) setOpen({ [topLevel[0].id]: true }); }, [course?.id]);
+  const toggle = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+
+  const mainVideosIn = (sid) => videos.filter((v) => v.section_id === sid && !v.parent_video_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const subVideosOf = (vid) => videos.filter((v) => v.parent_video_id === vid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const subfoldersOf = (fid) => (sections || []).filter((s) => s.parent_id === fid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  const LessonRow = ({ v, depth = 0 }) => {
+    const subs = subVideosOf(v.id);
+    return (
+      <>
+        <div className="lesson" style={{ paddingLeft: 18 + depth * 22 }} onClick={() => onOpen(v)}>
+          <div className={`tick ${watched.has(v.id) ? 'done' : ''}`}>✓</div>
+          <span className="l-title">{depth > 0 ? '↳ ' : ''}{v.title}</span>
+          <span className="l-meta">{v.pdf_url && <span className="pill pdf">PDF</span>}{subs.length > 0 && <span className="pill">{subs.length} part{subs.length > 1 ? 's' : ''}</span>}<span className="pill">Watch</span></span>
+        </div>
+        {subs.map((sub) => <LessonRow key={sub.id} v={sub} depth={depth + 1} />)}
+      </>
+    );
+  };
+
+  // renders a normal section OR a subfolder (both hold videos directly)
+  const VideoSection = ({ s, nested }) => {
+    const vids = mainVideosIn(s.id);
+    const allVids = videos.filter((v) => v.section_id === s.id);
+    const res = resources.filter((r) => r.section_id === s.id);
+    const doneCount = allVids.filter((v) => watched.has(v.id)).length;
+    const isOpen = !!open[s.id];
+    return (
+      <div className="section-group" key={s.id} style={nested ? { marginLeft: 18 } : undefined}>
+        <div className={`section-head ${isOpen ? 'open' : ''}`} onClick={() => toggle(s.id)}>
+          <span className="chev">▶</span><span className="st">{nested ? '🗂️ ' : ''}{s.title}</span><span className="count">{doneCount}/{allVids.length} done</span>
+        </div>
+        {isOpen && (
+          <div className="section-body">
+            {vids.map((v) => <LessonRow key={v.id} v={v} />)}
+            {res.map((r) => (
+              <a className="lesson" key={r.id} href={r.pdf_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                <div className="tick" style={{ borderColor: 'transparent' }}>📄</div>
+                <span className="l-title">{r.title}</span><span className="l-meta"><span className="pill pdf">Notes</span></span>
+              </a>
+            ))}
+            {vids.length === 0 && res.length === 0 && <div style={{ padding: '14px 18px', color: 'var(--ink-faint)', fontSize: 13 }}>Empty.</div>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // renders a folder → expands to subfolders
+  const FolderSection = ({ f }) => {
+    const subs = subfoldersOf(f.id);
+    const isOpen = !!open[f.id];
+    return (
+      <div className="section-group" key={f.id}>
+        <div className={`section-head ${isOpen ? 'open' : ''}`} onClick={() => toggle(f.id)}>
+          <span className="chev">▶</span><span className="st">📁 {f.title}</span><span className="count">{subs.length} folder{subs.length !== 1 ? 's' : ''}</span>
+        </div>
+        {isOpen && (
+          <div className="section-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
+            {subs.length === 0 ? <div style={{ padding: '10px 18px', color: 'var(--ink-faint)', fontSize: 13 }}>Coming soon.</div>
+              : subs.map((sub) => <VideoSection key={sub.id} s={sub} nested />)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div style={{ maxWidth: 460, margin: '26px auto 0', textAlign: 'center', padding: '0 16px' }}>
-      <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', lineHeight: 1.6 }}>
-        TA Forex Institute provides educational content only — not financial advice. We do not manage funds, execute trades or sell signals. Trading involves substantial risk of loss.
+    <div>
+      <div className="course-hero">
+        <img src={HERO[course?.id] || TEACH1} alt="" />
+        <div className="inner">
+          <div className="eyebrow">Stage</div>
+          <h1 className="serif">{course?.title}</h1>
+          <p>{course?.description}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+            <div className="progress-bar" style={{ flex: 1 }}><span style={{ width: `${progress}%` }} /></div>
+            <span style={{ fontSize: 13, color: '#cddcff' }}>{progress}% complete</span>
+          </div>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 14, justifyContent: 'center', marginTop: 10, fontSize: 12 }}>
-        <a href="?page=disclaimer" style={{ color: 'var(--ink-faint)' }}>Risk Disclaimer</a>
-        <a href="?page=terms" style={{ color: 'var(--ink-faint)' }}>Terms of Service</a>
-        <a href="?page=refunds" style={{ color: 'var(--ink-faint)' }}>Refund Policy</a>
+      {topLevel.length === 0 && (
+        <div className="empty"><div className="big serif">Content coming soon</div><div>Your mentor is preparing this stage.</div></div>
+      )}
+      {topLevel.map((s) => s.is_folder ? <FolderSection key={s.id} f={s} /> : <VideoSection key={s.id} s={s} />)}
+    </div>
+  );
+}
+
+function VideoView({ video, resources, done, onBack, onToggle }) {
+  const lib = video.bunny_library_id, vid = video.bunny_video_id;
+  const embed = lib && vid ? `https://iframe.mediadelivery.net/embed/${lib}/${vid}?autoplay=false&preload=true&responsive=true` : null;
+  return (
+    <div className="player-wrap">
+      <button className="back-link" onClick={onBack}>← Back to lessons</button>
+      <div className="video-frame">
+        {embed ? (
+          <iframe src={embed} loading="lazy" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen" allowFullScreen />
+        ) : (
+          <div className="empty" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="big serif">Video unavailable</div><div>This lesson hasn't been linked to a video yet.</div>
+          </div>
+        )}
       </div>
+      <div className="toolbar">
+        <button className={`mark-btn ${done ? 'done' : ''}`} onClick={onToggle}>{done ? '✓ Completed' : 'Mark as complete'}</button>
+        <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Speed (1.5× / 2×) and quality are in the player's gear icon.</span>
+      </div>
+      <h1 className="player-title serif">{video.title}</h1>
+      {video.description && <p className="player-desc">{video.description}</p>}
+      {video.pdf_url && (
+        <a className="resource-card" href={video.pdf_url} target="_blank" rel="noreferrer">
+          <div className="ico">📄</div><div><div className="rn">{video.pdf_name || 'Lesson notes'}</div><div className="rs">PDF · tap to open</div></div>
+        </a>
+      )}
+      {resources.map((r) => (
+        <a className="resource-card" key={r.id} href={r.pdf_url} target="_blank" rel="noreferrer">
+          <div className="ico">📄</div><div><div className="rn">{r.title}</div><div className="rs">Section notes · tap to open</div></div>
+        </a>
+      ))}
     </div>
   );
 }
