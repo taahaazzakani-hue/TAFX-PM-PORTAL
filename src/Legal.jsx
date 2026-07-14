@@ -100,13 +100,15 @@ export function LegalPage({ page }) {
   );
 }
 
-export function PaymentConsent({ onConfirm, onClose, busy }) {
+export function PaymentConsent({ onConfirm, onClose, busy, plan = 'pm', fee }) {
   const [agreed, setAgreed] = React.useState(false);
+  const planName = plan === '1v1' ? '1v1 Mentorship' : 'Private Mentorship';
+  const amount = fee || (plan === '1v1' ? 2075 : 830);
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,30,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 18, maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px 28px 22px', boxShadow: 'var(--shadow-lg)' }}>
         <h2 style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Before you pay — please read</h2>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 16 }}>Private Mentorship subscription · R830 per month</div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 16 }}>{planName} subscription · R{amount} per month</div>
 
         <div style={{ background: 'rgba(192,71,63,.07)', border: '1px solid rgba(192,71,63,.3)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
           <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>⚠️ Risk warning</div>
@@ -118,7 +120,7 @@ export function PaymentConsent({ onConfirm, onClose, busy }) {
         <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>Your subscription</div>
           <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.7 }}>
-            • <b>R830</b> billed now, then automatically every month until you cancel.<br />
+            • <b>R{amount}</b> billed now, then automatically every month until you cancel.<br />
             • Cancel anytime — message your mentor or cancel via PayFast; billing stops and access continues to the end of the paid period.<br />
             • Monthly renewals are non-refundable; first-payment refund requests within 7 days are reviewed per our <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>.
           </div>
