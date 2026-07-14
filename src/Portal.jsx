@@ -12,23 +12,25 @@ const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
-function BillingNotice({ billing, user }) {
+function PlanNotice({ track, plan, user }) {
   const [paying, setPaying] = useState(false);
   const [payErr, setPayErr] = useState('');
   const [consent, setConsent] = useState(false);
-  if (!billing || !billing.active || billing.status === 'ok' || billing.status === 'none') return null;
-  const due = billing.paid_until ? new Date(billing.paid_until).toLocaleDateString() : '';
-  const overdue = billing.status === 'overdue';
+  if (!track || !track.active || track.status === 'ok' || track.status === 'none') return null;
+  const label = plan === '1v1' ? '1v1 mentorship' : 'private mentorship';
+  const fee = track.fee || (plan === '1v1' ? 2075 : 830);
+  const due = track.paid_until ? new Date(track.paid_until).toLocaleDateString() : '';
+  const overdue = track.status === 'overdue';
   async function payNow() {
     setPaying(true); setPayErr('');
     try {
-      const { url } = await paystackInit({ user_id: user.id, return_url: window.location.origin });
+      const { url } = await paystackInit({ user_id: user.id, plan, return_url: window.location.origin });
       window.location.href = url;
     } catch (e) { setPayErr(e.message); setPaying(false); setConsent(false); }
   }
   return (
     <div style={{
-      borderRadius: 10, padding: '14px 18px', marginBottom: 20,
+      borderRadius: 10, padding: '14px 18px', marginBottom: 12,
       background: overdue ? 'rgba(192,71,63,.1)' : 'rgba(31,95,191,.08)',
       border: `1px solid ${overdue ? 'rgba(192,71,63,.4)' : 'rgba(31,95,191,.3)'}`,
       display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap'
@@ -36,18 +38,28 @@ function BillingNotice({ billing, user }) {
       <span style={{ fontSize: 20 }}>{overdue ? '\u26A0\uFE0F' : '\uD83D\uDD14'}</span>
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ fontWeight: 600, color: overdue ? 'var(--red)' : 'var(--ink)' }}>
-          {overdue ? 'Subscription overdue' : `Subscription due ${billing.daysLeft === 0 ? 'today' : `in ${billing.daysLeft} day${billing.daysLeft > 1 ? 's' : ''}`}`}
+          {plan === '1v1' ? '1v1' : 'PM'} {overdue ? 'subscription overdue' : `subscription due ${track.daysLeft === 0 ? 'today' : `in ${track.daysLeft} day${track.daysLeft > 1 ? 's' : ''}`}`}
         </div>
         <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-          Your R{billing.fee} monthly private mentorship subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`}
+          Your R{fee} monthly {label} subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`}
           {payErr && <span style={{ color: 'var(--red)' }}> {payErr}</span>}
         </div>
       </div>
       <button className="btn" onClick={() => setConsent(true)} disabled={paying} style={{ flex: 'none' }}>
-        {paying ? 'Opening…' : `Pay R${billing.fee} now`}
+        {paying ? 'Opening…' : `Pay R${fee} now`}
       </button>
-      {consent && <PaymentConsent busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
+      {consent && <PaymentConsent plan={plan} fee={fee} busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
     </div>
+  );
+}
+
+function BillingNotice({ billing, user }) {
+  if (!billing) return null;
+  return (
+    <>
+      <PlanNotice track={billing.pm} plan="pm" user={user} />
+      <PlanNotice track={billing.v1v1} plan="1v1" user={user} />
+    </>
   );
 }
 
