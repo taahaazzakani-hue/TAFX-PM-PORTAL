@@ -831,80 +831,95 @@ function AdminLeaderboard({ admin }) {
 /* ---------- BILLING ---------- */
 function Billing({ admin }) {
   const [rows, setRows] = useState(null);
-  const [edit, setEdit] = useState(null);
+  const [edit, setEdit] = useState(null); // { row, plan }
   const load = () => call('admin_billing_overview', { admin_id: admin.id }).then((d) => setRows(d.rows)).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
   if (!rows) return <div className="spinner" />;
 
   const fmt = (ms) => ms ? new Date(ms).toLocaleDateString() : '—';
-  const statusTag = (r) => {
-    if (!r.active) return <span className="status-tag" style={{ background: 'var(--panel-2)', color: 'var(--ink-faint)' }}>Not on plan</span>;
-    if (r.status === 'overdue') return <span className="status-tag s-rejected">Overdue</span>;
-    if (r.status === 'due_soon') return <span className="status-tag s-pending">Due in {r.daysLeft}d</span>;
+  const tag = (t) => {
+    if (!t || !t.active) return <span className="status-tag" style={{ background: 'var(--panel-2)', color: 'var(--ink-faint)' }}>—</span>;
+    if (t.status === 'overdue') return <span className="status-tag s-rejected">Overdue</span>;
+    if (t.status === 'due_soon') return <span className="status-tag s-pending">Due in {t.daysLeft}d</span>;
     return <span className="status-tag s-approved">Active</span>;
   };
-  const active = rows.filter((r) => r.active);
-  const overdue = active.filter((r) => r.status === 'overdue').length;
-  const dueSoon = active.filter((r) => r.status === 'due_soon').length;
+  const pmActive = rows.filter((r) => r.pm?.active);
+  const v1Active = rows.filter((r) => r.v1v1?.active);
+  const pmOverdue = pmActive.filter((r) => r.pm.status === 'overdue').length;
+  const v1Overdue = v1Active.filter((r) => r.v1v1.status === 'overdue').length;
+  const monthly = pmActive.length * 830 + v1Active.length * 2075;
+
+  const recordPay = (id, plan) => call('admin_record_payment', { admin_id: admin.id, user_id: id, plan }).then(load);
 
   return (
     <div>
       <div className="stat-row">
-        <div className="stat"><div className="v">{active.length}</div><div className="l">On the R800 plan</div></div>
-        <div className="stat"><div className="v" style={{ color: dueSoon ? 'var(--gold)' : undefined }}>{dueSoon}</div><div className="l">Due within 3 days</div></div>
-        <div className="stat"><div className="v" style={{ color: overdue ? 'var(--red)' : undefined }}>{overdue}</div><div className="l">Overdue</div></div>
-        <div className="stat"><div className="v">R{active.length * 800}</div><div className="l">Monthly recurring</div></div>
+        <div className="stat"><div className="v">{pmActive.length}</div><div className="l">On PM (R830)</div></div>
+        <div className="stat"><div className="v">{v1Active.length}</div><div className="l">On 1v1 (R2075)</div></div>
+        <div className="stat"><div className="v" style={{ color: (pmOverdue + v1Overdue) ? 'var(--red)' : undefined }}>{pmOverdue + v1Overdue}</div><div className="l">Overdue (either)</div></div>
+        <div className="stat"><div className="v">R{monthly.toLocaleString()}</div><div className="l">Monthly recurring</div></div>
       </div>
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="grid">
-          <thead><tr><th>Student</th><th>On plan</th><th>Paid until</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <th>Student</th>
+            <th>PM (R830)</th><th>PM paid until</th>
+            <th>1v1 (R2075)</th><th>1v1 paid until</th>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
                 <td><div style={{ fontWeight: 600 }}>{r.name}</div><div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{r.email}</div></td>
-                <td>{r.active ? 'Yes' : 'No'}</td>
-                <td>{fmt(r.paid_until)}</td>
-                <td>{statusTag(r)}{r.overdue_suspended ? <span style={{ fontSize: 11, color: 'var(--red)', display: 'block' }}>suspended</span> : null}</td>
+                <td>{tag(r.pm)}{r.overdue_suspended ? <span style={{ fontSize: 11, color: 'var(--red)', display: 'block' }}>suspended</span> : null}</td>
+                <td>{fmt(r.pm?.paid_until)}</td>
+                <td>{tag(r.v1v1)}</td>
+                <td>{fmt(r.v1v1?.paid_until)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button className="mini-btn good" onClick={() => call('admin_record_payment', { admin_id: admin.id, user_id: r.id, amount: 800 }).then(load)}>+ Payment</button>
-                  <button className="mini-btn" onClick={() => setEdit(r)}>Set date</button>
+                  <button className="mini-btn good" onClick={() => recordPay(r.id, 'pm')}>+PM</button>
+                  <button className="mini-btn good" onClick={() => recordPay(r.id, '1v1')}>+1v1</button>
+                  <button className="mini-btn" onClick={() => setEdit({ row: r, plan: 'pm' })}>PM date</button>
+                  <button className="mini-btn" onClick={() => setEdit({ row: r, plan: '1v1' })}>1v1 date</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {edit && <BillingModal admin={admin} row={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
+      <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 10 }}>“+PM” / “+1v1” record a payment and extend that plan by 30 days. “date” buttons let you set a specific due date or switch a plan on/off. The two plans bill independently with their own dates and reminders.</p>
+      {edit && <BillingModal admin={admin} row={edit.row} plan={edit.plan} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
     </div>
   );
 }
 
-function BillingModal({ admin, row, onClose, onSaved }) {
-  const [active, setActive] = useState(row.active);
-  const [date, setDate] = useState(row.paid_until ? new Date(row.paid_until).toISOString().slice(0, 10) : '');
+function BillingModal({ admin, row, plan, onClose, onSaved }) {
+  const track = plan === '1v1' ? row.v1v1 : row.pm;
+  const label = plan === '1v1' ? '1v1 (R2075/month)' : 'PM (R830/month)';
+  const [active, setActive] = useState(!!track?.active);
+  const [date, setDate] = useState(track?.paid_until ? new Date(track.paid_until).toISOString().slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
   async function save() {
     setSaving(true);
     try {
-      await call('admin_set_billing', { admin_id: admin.id, user_id: row.id, billing_active: active, paid_until: date ? new Date(date + 'T23:59:59').getTime() : null, reactivate: true });
+      await call('admin_set_billing', { admin_id: admin.id, user_id: row.id, plan, billing_active: active, paid_until: date ? new Date(date + 'T23:59:59').getTime() : null, reactivate: true });
       onSaved();
     } finally { setSaving(false); }
   }
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="serif">Billing · {row.name}</h3>
+        <h3 className="serif">{label} · {row.name}</h3>
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} style={{ width: 'auto' }} />
-            On the R800 monthly plan
+            On the {plan === '1v1' ? '1v1 R2075' : 'PM R830'} monthly plan
           </label>
         </div>
         <div className="field">
-          <label>Paid until (access & reminders run off this date)</label>
+          <label>Paid until (this plan’s access & reminders run off this date)</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
-        <p style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Setting a future date clears any suspension. Reminders go out 3 days before, on the day, and when overdue — after which access auto-suspends.</p>
+        <p style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Each plan is billed separately. Setting a future date clears suspension for that plan. Reminders go 3 days before, on the day, and when overdue.</p>
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
