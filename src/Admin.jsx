@@ -815,14 +815,43 @@ function ReviewCard({ e, admin, onSaved, open, onToggle }) {
 
 /* ---------- ADMIN LEADERBOARD (all students combined) ---------- */
 function AdminLeaderboard({ admin }) {
-  const [board, setBoard] = useState(null);
-  useEffect(() => { call('admin_leaderboard', { admin_id: admin.id }).then((d) => setBoard(d.board)).catch(() => setBoard([])); }, []);
-  if (!board) return <div className="spinner" />;
-  if (board.length === 0) return <div className="empty"><div className="big serif">No data yet</div><div>The leaderboard populates once students log trades.</div></div>;
+  const [boards, setBoards] = useState(null);
+  const [view, setView] = useState('live');
+  useEffect(() => {
+    call('admin_leaderboard', { admin_id: admin.id })
+      .then((d) => setBoards(d.boards || { all: d.board || [], live: [], backtest: [] }))
+      .catch(() => setBoards({ all: [], live: [], backtest: [] }));
+  }, []);
+  if (!boards) return <div className="spinner" />;
+  const board = boards[view] || [];
   const medal = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
+  const VIEWS = [['live', 'Live'], ['backtest', 'Backtest'], ['all', 'All combined']];
+  const switcher = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Leaderboard</span>
+      <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
+        {VIEWS.map(([k, lbl]) => (
+          <button key={k} onClick={() => setView(k)} style={{
+            cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
+            background: view === k ? 'var(--ink)' : 'transparent',
+            color: view === k ? '#fff' : 'var(--ink-soft)', transition: 'background .15s',
+          }}>{lbl} <span style={{ opacity: .65, fontWeight: 600 }}>({(boards[k] || []).length})</span></button>
+        ))}
+      </div>
+    </div>
+  );
+  if (board.length === 0) return (
+    <div>
+      {switcher}
+      <div className="empty"><div className="big serif">No {view === 'all' ? '' : view} data yet</div><div>This board populates once students log {view === 'backtest' ? 'backtest' : view === 'live' ? 'live' : ''} trades.</div></div>
+    </div>
+  );
   return (
     <div>
-      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 16 }}>All students ranked together by blended score (cumulative % + consistency + streak). Only you can see this.</p>
+      {switcher}
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 16 }}>
+        {view === 'live' ? 'Live trades only' : view === 'backtest' ? 'Backtest trades only' : 'Live + backtest combined'} — ranked by blended score (cumulative % + consistency + streak). Only you can see this.
+      </p>
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="grid">
           <thead><tr><th>#</th><th>Student</th><th>Levels</th><th>Score</th><th>Cum %</th><th>Net R/$</th><th>Win</th><th>Streak</th><th>Trades</th></tr></thead>
