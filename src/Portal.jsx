@@ -5,8 +5,9 @@ import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
-import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron } from './Icons.jsx';
+import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy } from './Icons.jsx';
 import { PaymentConsent } from './Legal.jsx';
+import Leaderboard from './Leaderboard.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
@@ -177,6 +178,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
             </div>
           )}
           {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
+          {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Effort Board" />}
           {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
           <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
           <div className="sb-section-label">Account</div>
@@ -194,7 +196,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Backtest Effort Board' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} user={user} />
@@ -207,6 +209,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'journal' && hasJournal && <Journal user={user} confluences={content.confluences} />}
+          {view === 'leaderboard' && hasJournal && <Leaderboard user={user} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
           {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
