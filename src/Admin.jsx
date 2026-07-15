@@ -317,11 +317,81 @@ function Content({ admin }) {
   const mainVideosIn = (sid) => videos.filter((v) => v.section_id === sid && !v.parent_video_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   const subVideosOf = (vid) => videos.filter((v) => v.parent_video_id === vid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
+  // ---- Drag & drop reordering (within a section, and across sections) ----
+  const [drag, setDrag] = useState(null);     // the video being dragged
+  const [dropHint, setDropHint] = useState(null); // { id } row hovered, or { sectionId } section hovered
+  const [saving, setSaving] = useState(false);
+
+  // Persist a whole list's order (and section) in one pass
+  async function persistOrder(list, sectionId) {
+    setSaving(true);
+    try {
+      await Promise.all(list.map((v, i) =>
+        (v.sort_order !== i || v.section_id !== sectionId)
+          ? call('admin_save_video', { admin_id: admin.id, video: { ...v, section_id: sectionId, sort_order: i } })
+          : Promise.resolve()
+      ));
+      await load();
+    } finally { setSaving(false); setDrag(null); setDropHint(null); }
+  }
+
+  // Drop `dragged` onto `target` row (same or different section)
+  async function dropOnRow(target) {
+    const d = drag;
+    if (!d || d.id === target.id) { setDrag(null); setDropHint(null); return; }
+    if (d.parent_video_id || target.parent_video_id) { setDrag(null); setDropHint(null); return; } // only top-level rows
+    const destSection = target.section_id;
+    const dest = mainVideosIn(destSection).filter((v) => v.id !== d.id);
+    const at = dest.findIndex((v) => v.id === target.id);
+    dest.splice(at < 0 ? dest.length : at, 0, d);
+    await persistOrder(dest, destSection);
+    // if it moved out of another section, tidy that section's numbering too
+    if (d.section_id !== destSection) {
+      const src = mainVideosIn(d.section_id).filter((v) => v.id !== d.id);
+      await Promise.all(src.map((v, i) => v.sort_order !== i
+        ? call('admin_save_video', { admin_id: admin.id, video: { ...v, sort_order: i } })
+        : Promise.resolve()));
+      await load();
+    }
+  }
+
+  // Drop onto a section header/empty area -> append to end of that section
+  async function dropOnSection(sectionId) {
+    const d = drag;
+    if (!d || d.parent_video_id) { setDrag(null); setDropHint(null); return; }
+    if (d.section_id === sectionId) { setDrag(null); setDropHint(null); return; }
+    const dest = [...mainVideosIn(sectionId), d];
+    await persistOrder(dest, sectionId);
+    const src = mainVideosIn(d.section_id).filter((v) => v.id !== d.id);
+    await Promise.all(src.map((v, i) => v.sort_order !== i
+      ? call('admin_save_video', { admin_id: admin.id, video: { ...v, sort_order: i } })
+      : Promise.resolve()));
+    await load();
+  }
+
   const VideoRow = ({ v, depth = 0 }) => {
     const subs = subVideosOf(v.id);
+    const draggable = depth === 0;
+    const isDragging = drag?.id === v.id;
+    const isHint = dropHint?.id === v.id;
     return (
       <>
-        <div className="admin-item" style={{ marginLeft: depth * 20 }}>
+        <div
+          className="admin-item"
+          draggable={draggable}
+          onDragStart={(e) => { if (!draggable) return; setDrag(v); e.dataTransfer.effectAllowed = 'move'; }}
+          onDragEnd={() => { setDrag(null); setDropHint(null); }}
+          onDragOver={(e) => { if (!draggable || !drag || drag.id === v.id) return; e.preventDefault(); e.stopPropagation(); setDropHint({ id: v.id }); }}
+          onDragLeave={() => setDropHint((h) => (h?.id === v.id ? null : h))}
+          onDrop={(e) => { if (!draggable) return; e.preventDefault(); e.stopPropagation(); dropOnRow(v); }}
+          style={{
+            marginLeft: depth * 20,
+            opacity: isDragging ? .4 : 1,
+            borderTop: isHint ? '2px solid var(--gold)' : undefined,
+            cursor: draggable ? 'grab' : undefined,
+          }}
+        >
+          {draggable && <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--ink-faint)', fontSize: 14, letterSpacing: -2 }}>⠿</span>}
           <span>{depth > 0 ? '↳ 🎬' : '🎬'}</span>
           <div><div className="ai-title">{v.title}</div><div className="ai-meta">{v.bunny_video_id ? `Bunny · ${String(v.bunny_video_id).slice(0, 8)}…` : 'No video'}{v.pdf_url ? ' · PDF' : ''}{subs.length ? ` · ${subs.length} sub-video${subs.length > 1 ? 's' : ''}` : ''}</div></div>
           <div className="sp" />
@@ -337,8 +407,17 @@ function Content({ admin }) {
   const SectionCard = ({ s, isSub }) => {
     const sv = mainVideosIn(s.id);
     const sr = resources.filter((r) => r.section_id === s.id);
+    const sectionHint = dropHint?.sectionId === s.id;
+    const base = isSub ? { marginLeft: 24, borderLeft: '3px solid var(--gold)' } : {};
     return (
-      <div className="card" style={isSub ? { marginLeft: 24, borderLeft: '3px solid var(--gold)' } : undefined} key={s.id}>
+      <div
+        className="card"
+        key={s.id}
+        onDragOver={(e) => { if (!drag || drag.section_id === s.id) return; e.preventDefault(); setDropHint({ sectionId: s.id }); }}
+        onDragLeave={() => setDropHint((h) => (h?.sectionId === s.id ? null : h))}
+        onDrop={(e) => { if (!drag) return; e.preventDefault(); dropOnSection(s.id); }}
+        style={{ ...base, outline: sectionHint ? '2px dashed var(--gold)' : undefined, outlineOffset: 3 }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <span style={{ fontSize: 18 }}>{isSub ? '🗂️' : '📄'}</span>
           <h3 style={{ margin: 0 }}>{s.title}</h3><div style={{ flex: 1 }} />
@@ -380,6 +459,10 @@ function Content({ admin }) {
   return (
     <div>
       <div className="admin-tabs">{courseTabs.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
+      <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: '8px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ letterSpacing: -2 }}>⠿</span> Drag a lesson by its handle to reorder it — drop it on another lesson to place it there, or onto a section to move it into that section.
+        {saving && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>Saving order…</span>}
+      </p>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
