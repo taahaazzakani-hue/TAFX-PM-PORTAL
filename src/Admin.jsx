@@ -695,6 +695,7 @@ const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','D
 function StudentJournalReview({ admin, student, onBack }) {
   const [data, setData] = useState(null);
   const [level, setLevel] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [open, setOpen] = useState(null);
   const [q, setQ] = useState('');
   const load = () => call('admin_journal_entries', { admin_id: admin.id, user_id: student.id }).then(setData);
@@ -703,8 +704,10 @@ function StudentJournalReview({ admin, student, onBack }) {
 
   const allEntries = data.entries;
   const levelsPresent = Array.from(new Set(allEntries.map((e) => e.level)));
-  let entries = level === 'all' ? allEntries : allEntries.filter((e) => e.level === level);
+  const levelScoped = level === 'all' ? allEntries : allEntries.filter((e) => e.level === level);
+  let entries = levelScoped;
   const ql = q.trim().toLowerCase();
+  if (typeFilter !== 'all') entries = entries.filter((e) => (e.trade_type || 'live') === typeFilter);
   if (ql) entries = entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, ...(e.confluences || [])].some((v) => (v || '').toString().toLowerCase().includes(ql)));
 
   // aggregate stats for the shown scope
@@ -719,6 +722,23 @@ function StudentJournalReview({ admin, student, onBack }) {
         <div>
           <h3 className="serif" style={{ fontSize: 24, fontWeight: 500, margin: 0 }}>{student.name}</h3>
           <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>{student.email}</div>
+        </div>
+      </div>
+
+      {/* Live / Backtest switch — filters everything below */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Reviewing</span>
+        <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
+          {[['all', 'All'], ['live', 'Live'], ['backtest', 'Backtest']].map(([k, lbl]) => {
+            const n = k === 'all' ? levelScoped.length : levelScoped.filter((e) => (e.trade_type || 'live') === k).length;
+            return (
+              <button key={k} onClick={() => setTypeFilter(k)} style={{
+                cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
+                background: typeFilter === k ? 'var(--ink)' : 'transparent',
+                color: typeFilter === k ? '#fff' : 'var(--ink-soft)', transition: 'background .15s',
+              }}>{lbl} <span style={{ opacity: .65, fontWeight: 600 }}>({n})</span></button>
+            );
+          })}
         </div>
       </div>
 
