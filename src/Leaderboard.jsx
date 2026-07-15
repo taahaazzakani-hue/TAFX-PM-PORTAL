@@ -6,12 +6,30 @@ import { call } from './api.js';
  * Ranks on work put in — backtests logged, daily streak, days active —
  * with win rate as a small bonus. Deliberately NOT a profit ranking.
  */
+function useCountdown(target) {
+  const [left, setLeft] = useState(() => (target ? target - Date.now() : 0));
+  useEffect(() => {
+    if (!target) return;
+    setLeft(target - Date.now());
+    const iv = setInterval(() => setLeft(target - Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [target]);
+  if (!target || left <= 0) return null;
+  const d = Math.floor(left / 86400000);
+  const h = Math.floor((left % 86400000) / 3600000);
+  const m = Math.floor((left % 3600000) / 60000);
+  const sec = Math.floor((left % 60000) / 1000);
+  return { d, h, m, s: sec };
+}
+
 export default function Leaderboard({ user }) {
   const [board, setBoard] = useState(null);
+  const [period, setPeriod] = useState(null);
+  const cd = useCountdown(period?.resets_at);
 
   useEffect(() => {
     call('backtest_leaderboard', { user_id: user.id })
-      .then((d) => setBoard(d.board || []))
+      .then((d) => { setBoard(d.board || []); setPeriod(d.period || null); })
       .catch(() => setBoard([]));
   }, [user.id]);
 
@@ -23,17 +41,41 @@ export default function Leaderboard({ user }) {
 
   return (
     <div>
-      <div className="hero-card" style={{ marginBottom: 18 }}>
-        <div className="eyebrow">Backtesting</div>
+      <div className="hero-card" style={{ marginBottom: 14 }}>
+        <div className="eyebrow">Backtesting · {period?.label || 'This month'}</div>
         <h1 style={{ fontSize: 28 }}>Student Leaderboard</h1>
         <div className="meta">Ranked on the work you put in — backtests logged, your daily streak and how consistently you show up. Not on profit.</div>
       </div>
+
+      {cd && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: 'rgba(31,95,191,.07)', border: '1px solid rgba(31,95,191,.28)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 18 }}>⏳</span>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>Board resets in {cd.d}d {cd.h}h {cd.m}m {cd.s}s</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              Rankings start fresh on the 1st. Your journal entries are never deleted — only the standings reset.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[[cd.d, 'days'], [cd.h, 'hrs'], [cd.m, 'min'], [cd.s, 'sec']].map(([v, l]) => (
+              <div key={l} style={{ textAlign: 'center', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 10px', minWidth: 46 }}>
+                <div style={{ fontWeight: 800, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{String(v).padStart(2, '0')}</div>
+                <div style={{ fontSize: 9.5, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: .5 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {me && (
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 16, borderColor: 'var(--gold)' }}>
           <div style={{ fontSize: 26, fontWeight: 800 }}>{medal(myRank - 1)}</div>
           <div style={{ flex: 1, minWidth: 160 }}>
-            <div style={{ fontWeight: 700 }}>You’re #{myRank} of {board.length}</div>
+            <div style={{ fontWeight: 700 }}>You’re #{myRank} of {board.length} this month</div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
               {me.volume} backtest{me.volume !== 1 ? 's' : ''} · {me.streak}-day streak · {me.activeDays} active day{me.activeDays !== 1 ? 's' : ''} · {me.winRate}% win
             </div>
@@ -48,7 +90,7 @@ export default function Leaderboard({ user }) {
       {board.length === 0 ? (
         <div className="empty">
           <div className="big serif">Be the first</div>
-          <div>No backtests logged yet. Log a backtest in your journal and you’ll appear here.</div>
+          <div>No backtests logged this month yet. Log one in your journal and you’ll appear here.</div>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
@@ -89,7 +131,7 @@ export default function Leaderboard({ user }) {
 
       <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 12, lineHeight: 1.6 }}>
         Effort points: each backtest logged = 3 · each day of your current streak = 8 · each day you’ve backtested = 4 · win rate adds a small bonus.
-        Volume and consistency count most — log honestly, including losers.
+        Volume and consistency count most — log honestly, including losers. Only this month’s backtests count; the board resets on the 1st (your entries stay).
       </p>
     </div>
   );
