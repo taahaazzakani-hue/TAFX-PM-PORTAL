@@ -27,6 +27,7 @@ function computeStats(entries) {
   return { trades: n, winRate: Math.round((wins / n) * 100), avgRR: +(sumRR / n).toFixed(2), avgPct: +(sumPct / n).toFixed(2), cumPct: +cumPct.toFixed(2), cumAmt: +cumAmt.toFixed(2), streak, best: +best.toFixed(2), worst: +worst.toFixed(2), confluences: conf, byKillzone: groupBy(entries, 'killzone', ['Asia', 'London', 'New York']), byModel: groupBy(entries, 'model', ['TA Model', 'Noctus Model', 'PM Session Model', 'TA Reversal Model', 'TA MMXM']) };
 }
 const TYPE_TABS = [['all', 'All'], ['live', 'Live'], ['backtest', 'Backtest']];
+const CUR_SYM = (c) => (c === 'USD' ? '$' : 'R');
 
 export default function Journal({ user, confluences, readOnly = false, preloaded = null }) {
   const myLevels = user.levels || [];
@@ -175,7 +176,7 @@ function TradeRow({ e, readOnly, onOpen, onEdit, onDel }) {
         {e.admin_comment && <span title="Mentor comment" style={{ fontSize: 14 }}>💬</span>}
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
-          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>1:{e.rr} · {Number(e.amount) >= 0 ? '+' : ''}{e.amount}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>1:{e.rr} · {Number(e.amount) >= 0 ? '+' : ''}{CUR_SYM(e.currency)}{e.amount}</div>
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 4 }} onClick={(ev) => ev.stopPropagation()}>
@@ -528,7 +529,7 @@ function PnlCalendar({ entries, onDay }) {
 }
 
 function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, onSave, onClose }) {
-  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', killzone: '', model: '', trade_type: 'live', confluences: [], tags: [], notes: '', images: [] });
+  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', currency: 'ZAR', killzone: '', model: '', trade_type: 'live', confluences: [], tags: [], notes: '', images: [] });
   const [newTag, setNewTag] = useState('');
   const [uploading, setUploading] = useState(false);
   const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
@@ -559,7 +560,16 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
         </div>
         <div className="row2">
           <div className="field"><label>% gain / loss</label><input type="number" step="0.01" value={f.pct} onChange={(e) => setF({ ...f, pct: e.target.value })} placeholder="e.g. 1.5 or -0.8" /></div>
-          <div className="field"><label>R / $ amount</label><input type="number" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="e.g. 2 or 1000" /></div>
+          <div className="field">
+            <label>P/L amount</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={f.currency || 'ZAR'} onChange={(e) => setF({ ...f, currency: e.target.value })} style={{ flex: '0 0 92px' }}>
+                <option value="ZAR">R (ZAR)</option>
+                <option value="USD">$ (USD)</option>
+              </select>
+              <input type="number" step="0.01" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="e.g. 1000" style={{ flex: 1 }} />
+            </div>
+          </div>
         </div>
         <div className="field"><label>Risk : Reward</label><input type="number" step="0.1" value={f.rr} onChange={(e) => setF({ ...f, rr: e.target.value })} placeholder="e.g. 2 for 1:2" /></div>
         <div className="row2">
@@ -650,7 +660,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           <span>{new Date(Number(entry.trade_date)).toLocaleDateString()}</span>
           <span>{entry.direction === 'long' ? '▲ Long' : '▼ Short'}</span>
           <span>RR 1:{entry.rr}</span>
-          <span>P/L {entry.amount}</span>
+          <span>P/L {CUR_SYM(entry.currency)}{entry.amount}</span>
           {entry.killzone && <span>🕐 {entry.killzone}</span>}
           {entry.model && <span>📐 {entry.model}</span>}
           <span>{(entry.trade_type || 'live') === 'backtest' ? '🧪 Backtest' : '🟢 Live'}</span>
