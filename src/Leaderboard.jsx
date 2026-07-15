@@ -25,7 +25,7 @@ export default function Leaderboard({ user }) {
     <div>
       <div className="hero-card" style={{ marginBottom: 18 }}>
         <div className="eyebrow">Backtesting</div>
-        <h1 style={{ fontSize: 28 }}>Effort board</h1>
+        <h1 style={{ fontSize: 28 }}>Student Leaderboard</h1>
         <div className="meta">Ranked on the work you put in — backtests logged, your daily streak and how consistently you show up. Not on profit.</div>
       </div>
 
