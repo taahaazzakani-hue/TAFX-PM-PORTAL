@@ -15,19 +15,48 @@ function BrandMark() {
   );
 }
 
+const HERO_COPY = {
+  login: {
+    h: 'Your edge is waiting inside.',
+    p: 'Pick up where you left off — your lessons, your journal, your numbers, and your mentor’s feedback, all in one place.',
+  },
+  register: {
+    h: 'Learn to trade with structure, not guesswork.',
+    p: 'Join the TAFX mentorship: a guided path through Beginner, Intermediate and Advanced — recorded sessions, homework reviewed by your mentor, and a journal that shows you exactly what’s working.',
+  },
+  admin: {
+    h: 'Mentor’s desk.',
+    p: 'Students, content, journals and billing — everything you need to run the institute.',
+  },
+  forgot: {
+    h: 'Let’s get you back in.',
+    p: 'Reset your password and pick up right where you left off.',
+  },
+};
+
 export default function Auth({ onAuthed }) {
-  const [mode, setMode] = useState('login'); // login | register | admin
+  const [mode, setMode] = useState('login'); // login | register | admin | forgot
+  const copy = HERO_COPY[mode] || HERO_COPY.login;
   return (
     <div className="auth-wrap">
       <div className="auth-visual">
         <img className="bg" src={mode === 'register' ? TEACH2 : mode === 'admin' ? TEACH5 : TEACH1} alt="" />
         <div className="caption">
+          <div className="eyebrow" style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', opacity: .85, marginBottom: 10 }}>
+            TA Forex Institute
+          </div>
           <div className="rule" />
-          <h2>Private Mentorship, structured for mastery.</h2>
-          <p>
-            A guided path through Beginner, Intermediate and Advanced stages — with
-            recorded sessions, notes, and progress tracked every step of the way.
-          </p>
+          <h2>{copy.h}</h2>
+          <p>{copy.p}</p>
+          {mode !== 'admin' && (
+            <div style={{ display: 'flex', gap: 18, marginTop: 22, flexWrap: 'wrap', fontSize: 12.5, opacity: .9 }}>
+              <span>Structured curriculum</span>
+              <span>·</span>
+              <span>1-on-1 mentor feedback</span>
+              <span>·</span>
+              <span>Trading journal & analytics</span>
+            </div>
+          )}
         </div>
       </div>
       <div className="auth-form-side">
@@ -75,7 +104,7 @@ function LoginForm({ onAuthed, setMode }) {
     <div className="auth-card">
       <BrandMark />
       <h1 className="serif">Welcome back</h1>
-      <p className="lead">Sign in to your mentorship portal</p>
+      <p className="lead">Sign in to the TA Forex Institute mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
       {overdue && (
         <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={() => setConsent(true)} disabled={paying}>
@@ -138,7 +167,7 @@ function RegisterForm({ setMode }) {
     <div className="auth-card">
       <BrandMark />
       <h1 className="serif">Request access</h1>
-      <p className="lead">For private mentorship students</p>
+      <p className="lead">Apply to join the TA Forex Institute private mentorship</p>
       {err && <div className="notice err">{err}</div>}
       <form onSubmit={submit}>
         <div className="field">
