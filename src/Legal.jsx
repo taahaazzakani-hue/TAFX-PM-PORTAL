@@ -144,7 +144,7 @@ export function PaymentConsent({ onConfirm, onClose, busy, plan = 'pm', fee }) {
 
 export function LegalFooter() {
   return (
-    <div style={{ maxWidth: 460, margin: '26px auto 0', textAlign: 'center', padding: '0 16px' }}>
+    <div className="legal-footer" style={{ maxWidth: 460, margin: '26px auto 0', textAlign: 'center', padding: '0 16px' }}>
       <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', lineHeight: 1.6 }}>
         TA Forex Institute provides educational content only — not financial advice. We do not manage funds, execute trades or sell signals. Trading involves substantial risk of loss.
       </div>
