@@ -178,7 +178,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
             </div>
           )}
           {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
-          {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Effort Board" />}
+          {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Student Leaderboard" />}
           {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
           <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
           <div className="sb-section-label">Account</div>
@@ -196,7 +196,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Backtest Effort Board' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Student Leaderboard' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} user={user} />
