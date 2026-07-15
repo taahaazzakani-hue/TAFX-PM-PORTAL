@@ -689,7 +689,8 @@ function Avatar({ url, name, size = 44 }) {
   );
 }
 
-const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', '1v1': '1v1' };
+const CUR_SYM = (c) => (c === 'USD' ? '$' : 'R');
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function StudentJournalReview({ admin, student, onBack }) {
@@ -792,7 +793,7 @@ function ReviewCard({ e, admin, onSaved, open, onToggle }) {
         {e.admin_comment && <span title="You commented">💬</span>}
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
-          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{Number(e.amount) >= 0 ? '+' : ''}{e.amount}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{Number(e.amount) >= 0 ? '+' : ''}{CUR_SYM(e.currency)}{e.amount}</div>
         </div>
         <span style={{ color: 'var(--ink-faint)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▶</span>
       </div>
