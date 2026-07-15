@@ -84,8 +84,25 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
     await call('journal_delete', { user_id: user.id, entry_id: id }); load();
   }
 
+  const countFor = (k) => k === 'all' ? allLevelEntries.length : allLevelEntries.filter((e) => (e.trade_type || 'live') === k).length;
+
   return (
     <div>
+      {/* Live / Backtest switch — filters the trade log, stats and analytics below */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Showing</span>
+        <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
+          {TYPE_TABS.map(([k, lbl]) => (
+            <button key={k} onClick={() => setTypeFilter(k)} style={{
+              cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
+              background: typeFilter === k ? 'var(--ink)' : 'transparent',
+              color: typeFilter === k ? '#fff' : 'var(--ink-soft)',
+              transition: 'background .15s',
+            }}>{lbl} <span style={{ opacity: .65, fontWeight: 600 }}>({countFor(k)})</span></button>
+          ))}
+        </div>
+      </div>
+
       <div className="admin-tabs">
         {levelsToShow.map((lv) => (<button key={lv} className={activeLevel === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
       </div>
@@ -100,17 +117,6 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
         ))}
       </div>
 
-      {/* Live / Backtest / All filter — applies to both Journal stats and Analytics */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
-        {TYPE_TABS.map(([k, lbl]) => (
-          <button key={k} onClick={() => setTypeFilter(k)} style={{
-            cursor: 'pointer', padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 999,
-            border: `1px solid ${typeFilter === k ? 'var(--gold)' : 'var(--line)'}`,
-            background: typeFilter === k ? 'var(--gold)' : 'var(--panel)',
-            color: typeFilter === k ? '#fff' : 'var(--ink-soft)',
-          }}>{lbl}{k !== 'all' ? ' trades' : ''}</button>
-        ))}
-      </div>
 
       {tab === 'journal' ? (
         <>
