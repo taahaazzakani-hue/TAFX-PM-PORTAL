@@ -393,10 +393,10 @@ function Content({ admin }) {
           }}
         >
           {draggable && <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--ink-faint)', fontSize: 14, letterSpacing: -2 }}>⠿</span>}
-          <span>{depth > 0 ? '↳ 🎬' : '🎬'}</span>
-          <div><div className="ai-title">{v.title}</div><div className="ai-meta">{v.bunny_video_id ? `Bunny · ${String(v.bunny_video_id).slice(0, 8)}…` : 'No video'}{v.pdf_url ? ' · PDF' : ''}{subs.length ? ` · ${subs.length} sub-video${subs.length > 1 ? 's' : ''}` : ''}</div></div>
+          <span>{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? '📄' : '🎬'}</span>
+          <div><div className="ai-title">{v.title}</div><div className="ai-meta">{(v.lesson_type || 'video') === 'pdf' ? (v.pdf_url ? 'PDF lesson' : '⚠️ PDF lesson — no PDF uploaded') : (v.bunny_video_id ? `Bunny · ${String(v.bunny_video_id).slice(0, 8)}…` : 'No video')}{v.pdf_url ? ' · PDF' : ''}{subs.length ? ` · ${subs.length} sub-video${subs.length > 1 ? 's' : ''}` : ''}</div></div>
           <div className="sp" />
-          {depth === 0 && <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: v.section_id, parent_video_id: v.id, bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: subs.length } })}>+ Sub-video</button>}
+          {depth === 0 && <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: v.section_id, parent_video_id: v.id, lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: subs.length } })}>+ Sub-video</button>}
           <button className="mini-btn" onClick={() => setModal({ type: 'video', data: v })}>Edit</button>
           <button className="mini-btn bad" onClick={() => del('video', 'video_id', v.id, subs.length ? 'Delete this video and its sub-videos?' : 'Delete?')}>Delete</button>
         </div>
@@ -421,7 +421,7 @@ function Content({ admin }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <span style={{ fontSize: 18 }}>{isSub ? '🗂️' : '📄'}</span>
           <h3 style={{ margin: 0 }}>{s.title}</h3><div style={{ flex: 1 }} />
-          <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: s.id, bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: sv.length } })}>+ Lesson</button>
+          <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: s.id, lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: sv.length } })}>+ Lesson</button>
           <button className="mini-btn" onClick={() => setModal({ type: 'section', data: s })}>Edit</button>
           <button className="mini-btn bad" onClick={() => del('section', 'section_id', s.id)}>Delete</button>
         </div>
@@ -466,7 +466,7 @@ function Content({ admin }) {
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
-        <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: videoContainers[0]?.id || '', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: 0 } })}>+ Add lesson</button>
+        <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: videoContainers[0]?.id || '', lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: 0 } })}>+ Add lesson</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'resource', data: { title: '', section_id: videoContainers[0]?.id || '', pdf_url: '', pdf_name: '', sort_order: 0 } })}>+ Add PDF</button>
       </div>
       {topLevel.length === 0 && <div className="empty"><div className="big serif">Nothing here yet</div><div>Add a section (holds videos) or a folder (holds subfolders) to start.</div></div>}
@@ -511,23 +511,47 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
     if (m) { lib = m[1]; vid = m[2]; }
     setF({ ...f, bunny_library_id: lib, bunny_video_id: vid });
   }
+  const lType = f.lesson_type || 'video';
+  const setType = (t) => setF({ ...f, lesson_type: t });
   return (<Modal onClose={onClose} title={(f.parent_video_id ? (data.id ? 'Edit sub-video' : 'New sub-video') : (data.id ? 'Edit lesson' : 'New lesson'))}>
     <div className="field"><label>Lesson title</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
     <div className="field"><label>Section</label>
       <select value={f.section_id} onChange={(e) => setF({ ...f, section_id: e.target.value })}><option value="">— No section —</option>{sections.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select>
     </div>
+
+    {/* Lesson type: a video lesson (Bunny) or a PDF lesson (the PDF is the lesson) */}
     <div className="field">
-      <label>Video</label>
-      <button type="button" className="btn ghost" onClick={() => setPicker(true)} style={{ marginBottom: 8 }}>📼 Pick from my Bunny library</button>
-      {f.bunny_video_id ? <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Linked: {String(f.bunny_video_id).slice(0, 12)}… (lib {f.bunny_library_id})</div> : <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>No video linked yet</div>}
+      <label>Lesson type</label>
+      <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
+        {[['video', '🎬 Video lesson'], ['pdf', '📄 PDF lesson']].map(([k, lbl]) => (
+          <button key={k} type="button" onClick={() => setType(k)} style={{
+            cursor: 'pointer', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
+            background: lType === k ? 'var(--ink)' : 'transparent',
+            color: lType === k ? '#fff' : 'var(--ink-soft)',
+          }}>{lbl}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 6 }}>
+        {lType === 'pdf'
+          ? 'Students open this lesson and read the PDF full-screen — no video needed.'
+          : 'Students watch the Bunny video. You can still attach a PDF as extra notes below.'}
+      </div>
     </div>
-    <div className="row2">
-      <div className="field"><label>Bunny Library ID</label><input value={f.bunny_library_id} onChange={(e) => setF({ ...f, bunny_library_id: e.target.value })} placeholder="e.g. 12345" /></div>
-      <div className="field"><label>Video ID / embed URL</label><input value={f.bunny_video_id} onChange={(e) => applyBunny(e.target.value)} placeholder="GUID or paste embed link" /></div>
-    </div>
+
+    {lType === 'video' && (<>
+      <div className="field">
+        <label>Video</label>
+        <button type="button" className="btn ghost" onClick={() => setPicker(true)} style={{ marginBottom: 8 }}>📼 Pick from my Bunny library</button>
+        {f.bunny_video_id ? <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Linked: {String(f.bunny_video_id).slice(0, 12)}… (lib {f.bunny_library_id})</div> : <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>No video linked yet</div>}
+      </div>
+      <div className="row2">
+        <div className="field"><label>Bunny Library ID</label><input value={f.bunny_library_id} onChange={(e) => setF({ ...f, bunny_library_id: e.target.value })} placeholder="e.g. 12345" /></div>
+        <div className="field"><label>Video ID / embed URL</label><input value={f.bunny_video_id} onChange={(e) => applyBunny(e.target.value)} placeholder="GUID or paste embed link" /></div>
+      </div>
+    </>)}
     <div className="field"><label>Description</label><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
     <div className="field">
-      <label>Lesson PDF (optional)</label>
+      <label>{lType === 'pdf' ? 'The PDF (this is the lesson)' : 'Lesson PDF (optional extra notes)'}</label>
       {f.pdf_url ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--bg-2)', marginBottom: 8 }}>
           <span style={{ fontSize: 18 }}>📄</span>
@@ -535,7 +559,7 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
           <button type="button" className="mini-btn bad" onClick={() => setF({ ...f, pdf_url: '', pdf_name: '' })}>Remove</button>
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 8 }}>No PDF attached yet. You can add one now or later via Edit.</div>
+        <div style={{ fontSize: 12, color: lType === 'pdf' ? 'var(--red)' : 'var(--ink-faint)', marginBottom: 8 }}>{lType === 'pdf' ? 'Required — upload the PDF students will read.' : 'No PDF attached yet. You can add one now or later via Edit.'}</div>
       )}
       <label className="btn ghost" style={{ display: 'inline-block', width: 'auto', padding: '9px 16px', cursor: 'pointer' }}>
         {pdfUploading ? 'Uploading…' : (f.pdf_url ? 'Replace PDF' : '+ Upload PDF')}
