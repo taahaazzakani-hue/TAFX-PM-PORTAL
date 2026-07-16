@@ -44,7 +44,7 @@ export default function Leaderboard({ user }) {
       <div className="hero-card" style={{ marginBottom: 14 }}>
         <div className="eyebrow">Backtesting · {period?.label || 'This month'}</div>
         <h1 style={{ fontSize: 28 }}>Student Leaderboard</h1>
-        <div className="meta">Ranked on the work you put in — backtests logged, your daily streak and how consistently you show up. Not on profit.</div>
+        <div className="meta">Ranked on the work you put in — how many backtests you log, how consistently, and how thoroughly you tag your confluences. Not on profit.</div>
       </div>
 
       {cd && (
@@ -77,7 +77,7 @@ export default function Leaderboard({ user }) {
           <div style={{ flex: 1, minWidth: 160 }}>
             <div style={{ fontWeight: 700 }}>You’re #{myRank} of {board.length} this month</div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-              {me.volume} backtest{me.volume !== 1 ? 's' : ''} · {me.streak}-day streak · {me.activeDays} active day{me.activeDays !== 1 ? 's' : ''} · {me.winRate}% win
+              {me.volume} backtest{me.volume !== 1 ? 's' : ''} · {me.activeDays} active day{me.activeDays !== 1 ? 's' : ''} · {me.streak}-day streak · {me.avgMarks ?? 0} avg confluences
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -97,7 +97,7 @@ export default function Leaderboard({ user }) {
           <table className="grid">
             <thead>
               <tr>
-                <th>#</th><th>Student</th><th>Effort</th><th>Backtests</th><th>Streak</th><th>Active days</th><th>Win rate</th>
+                <th>#</th><th>Student</th><th>Effort</th><th>Backtests</th><th>Active days</th><th>Streak</th><th>Avg confluences</th><th>Win rate</th>
               </tr>
             </thead>
             <tbody>
@@ -117,9 +117,10 @@ export default function Leaderboard({ user }) {
                       </div>
                     </td>
                     <td style={{ fontWeight: 700, color: 'var(--gold)' }}>{r.effort}</td>
-                    <td>{r.volume}</td>
-                    <td>{r.streak > 0 ? `🔥 ${r.streak}` : '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{r.volume}</td>
                     <td>{r.activeDays}</td>
+                    <td>{r.streak > 0 ? `🔥 ${r.streak}` : '—'}</td>
+                    <td>{(r.avgMarks ?? 0).toFixed(1)}</td>
                     <td>{r.winRate}%</td>
                   </tr>
                 );
@@ -130,8 +131,8 @@ export default function Leaderboard({ user }) {
       )}
 
       <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 12, lineHeight: 1.6 }}>
-        Effort points: each backtest logged = 3 · each day of your current streak = 8 · each day you’ve backtested = 4 · win rate adds a small bonus.
-        Volume and consistency count most — log honestly, including losers. Only this month’s backtests count; the board resets on the 1st (your entries stay).
+        Effort points: each backtest = 10 · each day you backtested = 5 · each day of your current streak = 4 · average confluences per backtest = 6 each (capped at 5) · win rate adds a small tiebreak.
+        Volume counts most — a big session in one day is never penalised. Tagging your confluences properly earns bonus points. Log honestly, including losers. Only this month’s backtests count; the board resets on the 1st (your entries stay).
       </p>
     </div>
   );
