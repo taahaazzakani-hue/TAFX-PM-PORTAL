@@ -298,6 +298,10 @@ function Content({ admin }) {
   const [content, setContent] = useState(null);
   const [course, setCourse] = useState(admin.admin_scope === 'advanced' ? 'pm_advanced' : 'pm_beginner');
   const [modal, setModal] = useState(null);
+  // Drag & drop state — must be declared before any early return (React hook rules)
+  const [drag, setDrag] = useState(null);         // video currently being dragged
+  const [dropHint, setDropHint] = useState(null); // { id } row hovered | { sectionId } section hovered
+  const [saving, setSaving] = useState(false);
   const load = () => call('get_content').then(setContent);
   useEffect(() => { load(); }, []);
   if (!content) return <div className="spinner" />;
@@ -318,10 +322,6 @@ function Content({ admin }) {
   const subVideosOf = (vid) => videos.filter((v) => v.parent_video_id === vid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
   // ---- Drag & drop reordering (within a section, and across sections) ----
-  const [drag, setDrag] = useState(null);     // the video being dragged
-  const [dropHint, setDropHint] = useState(null); // { id } row hovered, or { sectionId } section hovered
-  const [saving, setSaving] = useState(false);
-
   // Persist a whole list's order (and section) in one pass
   async function persistOrder(list, sectionId) {
     setSaving(true);
