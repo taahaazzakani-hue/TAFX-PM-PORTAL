@@ -165,6 +165,7 @@ function TradeRow({ e, readOnly, onOpen, onEdit, onDel }) {
         <div style={{ width: 44, textAlign: 'center' }}>
           <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{MONTHS[new Date(Number(e.trade_date)).getMonth()]}</div>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--serif)' }}>{new Date(Number(e.trade_date)).getDate()}</div>
+          <div style={{ fontSize: 10, color: 'var(--ink-faint)', fontVariantNumeric: 'tabular-nums' }}>{new Date(Number(e.trade_date)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
         </div>
         <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)' }} />
         <div style={{ minWidth: 0 }}>
@@ -210,6 +211,10 @@ function StatsSummary({ stats }) {
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const weekdayOf = (e) => WEEKDAYS[(new Date(Number(e.trade_date || e.created_at)).getDay() + 6) % 7];
+// Hour-of-entry helpers. Entries logged before the time field existed sit at 00:00,
+// so we only chart hours that actually contain trades.
+const hourOf = (e) => new Date(Number(e.trade_date || e.created_at)).getHours();
+const hourLabel = (h) => `${String(h).padStart(2, '0')}:00`;
 
 function bestWorst(data) {
   const rows = Object.entries(data || {}).filter(([, v]) => v && v.trades > 0);
@@ -381,8 +386,13 @@ function KpiStrip({ stats, adv }) {
 
 function AnalyticsPanel({ stats, entries, onDay }) {
   const topConf = Object.entries(stats.confluences || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const withDay = entries.map((e) => ({ ...e, _wd: weekdayOf(e), _pair: (e.pair || '').toUpperCase().trim(), _dir: e.direction === 'short' ? 'Short' : 'Long' }));
+  const withDay = entries.map((e) => ({ ...e, _wd: weekdayOf(e), _hr: hourLabel(hourOf(e)), _pair: (e.pair || '').toUpperCase().trim(), _dir: e.direction === 'short' ? 'Short' : 'Long' }));
   const byDay = groupBy(withDay, '_wd', WEEKDAYS);
+  // Hour-of-entry: only show hours that actually have trades, in chronological order
+  const hoursPresent = Array.from(new Set(entries.map(hourOf))).sort((a, b) => a - b);
+  const byHour = groupBy(withDay, '_hr', hoursPresent.map(hourLabel));
+  const byHourPct = {};
+  for (const e of entries) { const h = hourOf(e); byHourPct[h] = (byHourPct[h] || 0) + (Number(e.pct) || 0); }
   const byDir = groupBy(withDay, '_dir', ['Long', 'Short']);
   const pairKeys = Array.from(new Set(withDay.map((e) => e._pair).filter(Boolean)));
   const byPair = groupBy(withDay, '_pair', pairKeys);
@@ -406,9 +416,13 @@ function AnalyticsPanel({ stats, entries, onDay }) {
         { label: 'Tag', icon: '🏷', data: byTag },
       ]} />
       <BarChart title="Net % by day of week" hint="Which days actually make you money." rows={WEEKDAYS.map((d) => [d, byDay[d]])} />
+      {hoursPresent.length > 0 && (
+        <BarChart title="Net % by hour of entry" hint="The time of day you actually enter trades — find your best window." rows={hoursPresent.map((h) => [hourLabel(h), byHourPct[h] || 0])} />
+      )}
       <PnlCalendar entries={entries} onDay={onDay} />
       <Breakdown title="Long vs Short" data={byDir} order={['Long', 'Short']} />
       <Breakdown title="Performance by killzone" data={stats.byKillzone} order={['Asia', 'London', 'New York']} />
+      {hoursPresent.length > 0 && <Breakdown title="Performance by hour of entry" data={byHour} order={hoursPresent.map(hourLabel)} />}
       <Breakdown title="Performance by model" data={stats.byModel} order={['TA Model', 'Noctus Model', 'PM Session Model', 'TA Reversal Model', 'TA MMXM']} />
       {tagKeys.length > 0 && <Breakdown title="Performance by tag" data={byTag} order={tagKeys} />}
       {pairKeys.length > 1 && <Breakdown title="Performance by pair" data={byPair} order={pairKeys} />}
@@ -532,7 +546,25 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
   const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', currency: 'ZAR', killzone: '', model: '', trade_type: 'live', confluences: [], tags: [], notes: '', images: [] });
   const [newTag, setNewTag] = useState('');
   const [uploading, setUploading] = useState(false);
-  const dateStr = new Date(Number(f.trade_date)).toISOString().slice(0, 10);
+  const _d = new Date(Number(f.trade_date));
+  const _p2 = (n) => String(n).padStart(2, '0');
+  const dateStr = `${_d.getFullYear()}-${_p2(_d.getMonth() + 1)}-${_p2(_d.getDate())}`;
+  const timeStr = `${_p2(_d.getHours())}:${_p2(_d.getMinutes())}`;
+  // keep the time when the date changes, and vice-versa
+  const setDatePart = (v) => {
+    if (!v) return;
+    const [Y, M, D] = v.split('-').map(Number);
+    const d = new Date(Number(f.trade_date));
+    d.setFullYear(Y, M - 1, D);
+    setF({ ...f, trade_date: d.getTime() });
+  };
+  const setTimePart = (v) => {
+    if (!v) return;
+    const [h, m] = v.split(':').map(Number);
+    const d = new Date(Number(f.trade_date));
+    d.setHours(h, m, 0, 0);
+    setF({ ...f, trade_date: d.getTime() });
+  };
   const toggleConf = (label) => { const has = (f.confluences || []).includes(label); setF({ ...f, confluences: has ? f.confluences.filter((c) => c !== label) : [...(f.confluences || []), label] }); };
   const toggleTag = (t) => { const has = (f.tags || []).includes(t); setF({ ...f, tags: has ? f.tags.filter((x) => x !== t) : [...(f.tags || []), t] }); };
   async function handleCreateTag() {
@@ -551,7 +583,13 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="serif">{entry ? 'Edit entry' : 'New journal entry'}</h3>
         <div className="row2">
-          <div className="field"><label>Date</label><input type="date" value={dateStr} onChange={(e) => setF({ ...f, trade_date: new Date(e.target.value).getTime() })} /></div>
+          <div className="field">
+            <label>Date & time of entry</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="date" value={dateStr} onChange={(e) => setDatePart(e.target.value)} style={{ flex: 1 }} />
+              <input type="time" value={timeStr} onChange={(e) => setTimePart(e.target.value)} style={{ flex: '0 0 120px' }} title="Time you entered the trade" />
+            </div>
+          </div>
           <div className="field"><label>Pair / Instrument</label><input value={f.pair} onChange={(e) => setF({ ...f, pair: e.target.value })} placeholder="e.g. XAUUSD" /></div>
         </div>
         <div className="row2">
