@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { call, uploadFile } from './api.js';
 import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
@@ -299,7 +299,10 @@ function Content({ admin }) {
   const [course, setCourse] = useState(admin.admin_scope === 'advanced' ? 'pm_advanced' : 'pm_beginner');
   const [modal, setModal] = useState(null);
   // Drag & drop state — must be declared before any early return (React hook rules)
-  const [drag, setDrag] = useState(null);         // video currently being dragged
+  // NOTE: the dragged item lives in a ref, not state. VideoRow/SectionCard are defined
+  // inside this component, so a state change during a drag would remount the rows and
+  // cancel the native drag. The ref keeps the drag alive; only the hover hint re-renders.
+  const dragRef = useRef(null);
   const [dropHint, setDropHint] = useState(null); // { id } row hovered | { sectionId } section hovered
   const [saving, setSaving] = useState(false);
   const load = () => call('get_content').then(setContent);
@@ -332,14 +335,14 @@ function Content({ admin }) {
           : Promise.resolve()
       ));
       await load();
-    } finally { setSaving(false); setDrag(null); setDropHint(null); }
+    } finally { setSaving(false); dragRef.current = null; setDropHint(null); }
   }
 
   // Drop `dragged` onto `target` row (same or different section)
   async function dropOnRow(target) {
-    const d = drag;
-    if (!d || d.id === target.id) { setDrag(null); setDropHint(null); return; }
-    if (d.parent_video_id || target.parent_video_id) { setDrag(null); setDropHint(null); return; } // only top-level rows
+    const d = dragRef.current;
+    if (!d || d.id === target.id) { dragRef.current = null; setDropHint(null); return; }
+    if (d.parent_video_id || target.parent_video_id) { dragRef.current = null; setDropHint(null); return; } // only top-level rows
     const destSection = target.section_id;
     const dest = mainVideosIn(destSection).filter((v) => v.id !== d.id);
     const at = dest.findIndex((v) => v.id === target.id);
@@ -357,9 +360,9 @@ function Content({ admin }) {
 
   // Drop onto a section header/empty area -> append to end of that section
   async function dropOnSection(sectionId) {
-    const d = drag;
-    if (!d || d.parent_video_id) { setDrag(null); setDropHint(null); return; }
-    if (d.section_id === sectionId) { setDrag(null); setDropHint(null); return; }
+    const d = dragRef.current;
+    if (!d || d.parent_video_id) { dragRef.current = null; setDropHint(null); return; }
+    if (d.section_id === sectionId) { dragRef.current = null; setDropHint(null); return; }
     const dest = [...mainVideosIn(sectionId), d];
     await persistOrder(dest, sectionId);
     const src = mainVideosIn(d.section_id).filter((v) => v.id !== d.id);
@@ -372,22 +375,20 @@ function Content({ admin }) {
   const VideoRow = ({ v, depth = 0 }) => {
     const subs = subVideosOf(v.id);
     const draggable = depth === 0;
-    const isDragging = drag?.id === v.id;
+    
     const isHint = dropHint?.id === v.id;
     return (
       <>
         <div
           className="admin-item"
           draggable={draggable}
-          onDragStart={(e) => { if (!draggable) return; setDrag(v); e.dataTransfer.effectAllowed = 'move'; }}
-          onDragEnd={() => { setDrag(null); setDropHint(null); }}
-          onDragOver={(e) => { if (!draggable || !drag || drag.id === v.id) return; e.preventDefault(); e.stopPropagation(); setDropHint({ id: v.id }); }}
-          onDragLeave={() => setDropHint((h) => (h?.id === v.id ? null : h))}
+          onDragStart={(e) => { if (!draggable) return; dragRef.current = v; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', v.id); }}
+          onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
+          onDragOver={(e) => { const d = dragRef.current; if (!draggable || !d || d.id === v.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropHint?.id !== v.id) setDropHint({ id: v.id }); }}
           onDrop={(e) => { if (!draggable) return; e.preventDefault(); e.stopPropagation(); dropOnRow(v); }}
           style={{
             marginLeft: depth * 20,
-            opacity: isDragging ? .4 : 1,
-            borderTop: isHint ? '2px solid var(--gold)' : undefined,
+            borderTop: isHint ? '2px solid var(--gold)' : '2px solid transparent',
             cursor: draggable ? 'grab' : undefined,
           }}
         >
@@ -413,9 +414,8 @@ function Content({ admin }) {
       <div
         className="card"
         key={s.id}
-        onDragOver={(e) => { if (!drag || drag.section_id === s.id) return; e.preventDefault(); setDropHint({ sectionId: s.id }); }}
-        onDragLeave={() => setDropHint((h) => (h?.sectionId === s.id ? null : h))}
-        onDrop={(e) => { if (!drag) return; e.preventDefault(); dropOnSection(s.id); }}
+        onDragOver={(e) => { const d = dragRef.current; if (!d || d.section_id === s.id) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dropHint?.sectionId !== s.id) setDropHint({ sectionId: s.id }); }}
+        onDrop={(e) => { if (!dragRef.current) return; e.preventDefault(); dropOnSection(s.id); }}
         style={{ ...base, outline: sectionHint ? '2px dashed var(--gold)' : undefined, outlineOffset: 3 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
