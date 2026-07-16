@@ -354,8 +354,8 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
       <>
         <div className="lesson" style={{ paddingLeft: 18 + depth * 22 }} onClick={() => onOpen(v)}>
           <div className={`tick ${watched.has(v.id) ? 'done' : ''}`}>✓</div>
-          <span className="l-title">{depth > 0 ? '↳ ' : ''}{v.title}</span>
-          <span className="l-meta">{v.pdf_url && <span className="pill pdf">PDF</span>}{subs.length > 0 && <span className="pill">{subs.length} part{subs.length > 1 ? 's' : ''}</span>}<span className="pill">Watch</span></span>
+          <span className="l-title">{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? '📄 ' : ''}{v.title}</span>
+          <span className="l-meta">{(v.lesson_type || 'video') !== 'pdf' && v.pdf_url && <span className="pill pdf">PDF</span>}{subs.length > 0 && <span className="pill">{subs.length} part{subs.length > 1 ? 's' : ''}</span>}<span className="pill">{(v.lesson_type || 'video') === 'pdf' ? 'Read' : 'Watch'}</span></span>
         </div>
         {subs.map((sub) => <LessonRow key={sub.id} v={sub} depth={depth + 1} />)}
       </>
@@ -432,27 +432,45 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
 }
 
 function VideoView({ video, resources, done, onBack, onToggle }) {
+  const isPdfLesson = (video.lesson_type || 'video') === 'pdf';
   const lib = video.bunny_library_id, vid = video.bunny_video_id;
   const embed = lib && vid ? `https://iframe.mediadelivery.net/embed/${lib}/${vid}?autoplay=false&preload=true&responsive=true` : null;
   return (
     <div className="player-wrap">
       <button className="back-link" onClick={onBack}>← Back to lessons</button>
-      <div className="video-frame">
-        {embed ? (
-          <iframe src={embed} loading="lazy" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen" allowFullScreen />
-        ) : (
-          <div className="empty" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div className="big serif">Video unavailable</div><div>This lesson hasn't been linked to a video yet.</div>
+
+      {isPdfLesson ? (
+        /* PDF lesson — the document IS the lesson, shown full-screen */
+        video.pdf_url ? (
+          <div style={{ borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--panel-2)', boxShadow: 'var(--shadow)' }}>
+            <object data={video.pdf_url} type="application/pdf" style={{ width: '100%', height: '78vh', display: 'block' }}>
+              <iframe src={`${video.pdf_url}#view=FitH`} title={video.title} style={{ width: '100%', height: '78vh', border: 'none' }} />
+            </object>
           </div>
-        )}
-      </div>
+        ) : (
+          <div className="empty"><div className="big serif">Document unavailable</div><div>This lesson hasn't had its PDF uploaded yet.</div></div>
+        )
+      ) : (
+        <div className="video-frame">
+          {embed ? (
+            <iframe src={embed} loading="lazy" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen" allowFullScreen />
+          ) : (
+            <div className="empty" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div className="big serif">Video unavailable</div><div>This lesson hasn't been linked to a video yet.</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="toolbar">
         <button className={`mark-btn ${done ? 'done' : ''}`} onClick={onToggle}>{done ? '✓ Completed' : 'Mark as complete'}</button>
-        <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Speed (1.5× / 2×) and quality are in the player's gear icon.</span>
+        {isPdfLesson
+          ? (video.pdf_url && <a href={video.pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--gold-soft)' }}>Open full screen / download ↗</a>)
+          : <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Speed (1.5× / 2×) and quality are in the player's gear icon.</span>}
       </div>
       <h1 className="player-title serif">{video.title}</h1>
       {video.description && <p className="player-desc">{video.description}</p>}
-      {video.pdf_url && (
+      {!isPdfLesson && video.pdf_url && (
         <a className="resource-card" href={video.pdf_url} target="_blank" rel="noreferrer">
           <div className="ico">📄</div><div><div className="rn">{video.pdf_name || 'Lesson notes'}</div><div className="rs">PDF · tap to open</div></div>
         </a>
