@@ -614,11 +614,36 @@ function BunnyPicker({ admin, onPick, onClose }) {
 
 function ResourceModal({ data, sections, onSave, onClose }) {
   const [f, setF] = useState(data);
+  const [uploading, setUploading] = useState(false);
+  async function uploadPdf(ev) {
+    const file = ev.target.files?.[0]; if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) { alert('Please choose a PDF file.'); return; }
+    setUploading(true);
+    try {
+      const url = await uploadFile(file, 'lesson-pdfs');
+      setF((s) => ({ ...s, pdf_url: url, pdf_name: file.name, title: s.title || file.name.replace(/\.pdf$/i, '') }));
+    } catch { alert('PDF upload failed. Try again.'); } finally { setUploading(false); }
+  }
   return (<Modal onClose={onClose} title={data.id ? 'Edit resource' : 'New PDF resource'}>
     <div className="field"><label>Title</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Week 1 Notes" /></div>
     <div className="field"><label>Attach to section</label><select value={f.section_id} onChange={(e) => setF({ ...f, section_id: e.target.value })}><option value="">— Course level —</option>{sections.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select></div>
-    <div className="field"><label>PDF link</label><input value={f.pdf_url} onChange={(e) => setF({ ...f, pdf_url: e.target.value })} placeholder="https://…" /></div>
-    <div className="modal-actions"><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={() => onSave(f)} disabled={!f.title || !f.pdf_url}>Save</button></div>
+    <div className="field">
+      <label>PDF file</label>
+      {f.pdf_url ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--bg-2)', marginBottom: 8 }}>
+          <span style={{ fontSize: 18 }}>📄</span>
+          <a href={f.pdf_url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13, color: 'var(--gold)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.pdf_name || 'Uploaded PDF'}</a>
+          <button type="button" className="mini-btn bad" onClick={() => setF({ ...f, pdf_url: '', pdf_name: '' })}>Remove</button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 8 }}>Choose a PDF from your computer — it uploads straight to the portal.</div>
+      )}
+      <label className="btn ghost" style={{ display: 'inline-block', width: 'auto', padding: '9px 16px', cursor: 'pointer' }}>
+        {uploading ? 'Uploading…' : (f.pdf_url ? 'Replace PDF' : '+ Upload PDF')}
+        <input type="file" accept="application/pdf,.pdf" onChange={uploadPdf} style={{ display: 'none' }} disabled={uploading} />
+      </label>
+    </div>
+    <div className="modal-actions"><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={() => onSave(f)} disabled={!f.title || !f.pdf_url || uploading}>Save</button></div>
   </Modal>);
 }
 
