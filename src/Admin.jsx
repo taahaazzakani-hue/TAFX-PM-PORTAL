@@ -32,7 +32,9 @@ const HOMEWORK_LEVELS = [
 
 export default function Admin({ user, onLogout, onUpdated }) {
   const scoped = user.admin_scope === 'advanced';
-  const [tab, setTab] = useState(scoped ? 'students' : 'dashboard');
+  const manager = user.admin_scope === 'manager';
+  const owner = !user.admin_scope;
+  const [tab, setTab] = useState(scoped || manager ? 'students' : 'dashboard');
   const T = ({ id, icon, label }) => (
     <div className="nav-course"><div className={`row ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{icon} {label}</div></div>
   );
@@ -46,16 +48,17 @@ export default function Admin({ user, onLogout, onUpdated }) {
           </div>
         </div>
         <div className="sb-body">
-          {!scoped && <T id="dashboard" icon={<IcGrid />} label="Command Center" />}
+          {!scoped && !manager && <T id="dashboard" icon={<IcGrid />} label="Command Center" />}
           <div className="sb-section-label">Manage</div>
           <T id="students" icon={<IcUsers />} label="Students" />
-          <T id="content" icon={<IcVideo />} label="Content" />
-          <T id="homework" icon={<IcClipboard />} label="Homework" />
-          <T id="journals" icon={<IcJournal />} label="Journals" />
-          {!scoped && <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />}
-          {!scoped && <T id="confluences" icon={<IcTag />} label="Confluences" />}
-          {!scoped && <T id="overview" icon={<IcChart />} label="Overview" />}
+          {!manager && <T id="content" icon={<IcVideo />} label="Content" />}
+          {!manager && <T id="homework" icon={<IcClipboard />} label="Homework" />}
+          {!manager && <T id="journals" icon={<IcJournal />} label="Journals" />}
+          {!scoped && !manager && <T id="leaderboard" icon={<IcTrophy />} label="Leaderboard" />}
+          {!scoped && !manager && <T id="confluences" icon={<IcTag />} label="Confluences" />}
+          {!scoped && !manager && <T id="overview" icon={<IcChart />} label="Overview" />}
           {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
+          {owner && <T id="audit" icon={<IcClipboard />} label="Activity Log" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
         <div className="sb-foot">
@@ -75,6 +78,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'leaderboard' && <AdminLeaderboard admin={user} />}
           {tab === 'overview' && <Overview admin={user} />}
           {tab === 'billing' && <Billing admin={user} />}
+          {tab === 'audit' && owner && <AuditLog admin={user} />}
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
         </div>
       </main>
@@ -341,7 +345,7 @@ function Content({ admin }) {
   // Drop `dragged` onto `target` row (same or different section)
   async function dropOnRow(target) {
     const d = dragRef.current;
-    if (!d || d.id === target.id) { dragRef.current = null; setDropHint(null); return; }
+    if (!d || d.__kind !== 'lesson' || d.id === target.id) { dragRef.current = null; setDropHint(null); return; }
     if (d.parent_video_id || target.parent_video_id) { dragRef.current = null; setDropHint(null); return; } // only top-level rows
     const destSection = target.section_id;
     const dest = mainVideosIn(destSection).filter((v) => v.id !== d.id);
@@ -358,10 +362,54 @@ function Content({ admin }) {
     }
   }
 
+  // ----- PDF resource reordering (same pattern as lessons) -----
+  const resourcesIn = (sid) => resources.filter((r) => r.section_id === sid).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  async function persistResourceOrder(list, sectionId) {
+    setSaving(true);
+    try {
+      await Promise.all(list.map((r, i) =>
+        (r.sort_order !== i || r.section_id !== sectionId)
+          ? call('admin_save_resource', { admin_id: admin.id, resource: { ...r, section_id: sectionId, sort_order: i } })
+          : Promise.resolve()
+      ));
+      await load();
+    } finally { setSaving(false); dragRef.current = null; setDropHint(null); }
+  }
+
+  async function dropOnResource(target) {
+    const d = dragRef.current;
+    if (!d || d.__kind !== 'resource' || d.id === target.id) { dragRef.current = null; setDropHint(null); return; }
+    const destSection = target.section_id;
+    const dest = resourcesIn(destSection).filter((r) => r.id !== d.id);
+    const at = dest.findIndex((r) => r.id === target.id);
+    dest.splice(at < 0 ? dest.length : at, 0, d);
+    await persistResourceOrder(dest, destSection);
+    if (d.section_id !== destSection) {
+      const src = resourcesIn(d.section_id).filter((r) => r.id !== d.id);
+      await Promise.all(src.map((r, i) => r.sort_order !== i
+        ? call('admin_save_resource', { admin_id: admin.id, resource: { ...r, sort_order: i } })
+        : Promise.resolve()));
+      await load();
+    }
+  }
+
   // Drop onto a section header/empty area -> append to end of that section
   async function dropOnSection(sectionId) {
     const d = dragRef.current;
-    if (!d || d.parent_video_id) { dragRef.current = null; setDropHint(null); return; }
+    if (!d) { setDropHint(null); return; }
+    if (d.__kind === 'resource') {
+      if (d.section_id === sectionId) { dragRef.current = null; setDropHint(null); return; }
+      const dest = [...resourcesIn(sectionId), d];
+      await persistResourceOrder(dest, sectionId);
+      const src = resourcesIn(d.section_id).filter((r) => r.id !== d.id);
+      await Promise.all(src.map((r, i) => r.sort_order !== i
+        ? call('admin_save_resource', { admin_id: admin.id, resource: { ...r, sort_order: i } })
+        : Promise.resolve()));
+      await load();
+      return;
+    }
+    if (d.parent_video_id) { dragRef.current = null; setDropHint(null); return; }
     if (d.section_id === sectionId) { dragRef.current = null; setDropHint(null); return; }
     const dest = [...mainVideosIn(sectionId), d];
     await persistOrder(dest, sectionId);
@@ -382,9 +430,9 @@ function Content({ admin }) {
         <div
           className="admin-item"
           draggable={draggable}
-          onDragStart={(e) => { if (!draggable) return; dragRef.current = v; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', v.id); }}
+          onDragStart={(e) => { if (!draggable) return; dragRef.current = { ...v, __kind: 'lesson' }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', v.id); }}
           onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
-          onDragOver={(e) => { const d = dragRef.current; if (!draggable || !d || d.id === v.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropHint?.id !== v.id) setDropHint({ id: v.id }); }}
+          onDragOver={(e) => { const d = dragRef.current; if (!draggable || !d || d.__kind !== 'lesson' || d.id === v.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropHint?.id !== v.id) setDropHint({ id: v.id }); }}
           onDrop={(e) => { if (!draggable) return; e.preventDefault(); e.stopPropagation(); dropOnRow(v); }}
           style={{
             marginLeft: depth * 20,
@@ -427,7 +475,18 @@ function Content({ admin }) {
         </div>
         {sv.map((v) => <VideoRow key={v.id} v={v} />)}
         {sr.map((r) => (
-          <div className="admin-item" key={r.id}><span>📄</span><div><div className="ai-title">{r.title}</div><div className="ai-meta">PDF resource</div></div>
+          <div
+            className="admin-item"
+            key={r.id}
+            draggable
+            onDragStart={(e) => { dragRef.current = { ...r, __kind: 'resource' }; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); }}
+            onDragEnd={() => { dragRef.current = null; setDropHint(null); }}
+            onDragOver={(e) => { const d = dragRef.current; if (!d || d.__kind !== 'resource' || d.id === r.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; if (dropHint?.id !== r.id) setDropHint({ id: r.id }); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); dropOnResource(r); }}
+            style={{ borderTop: dropHint?.id === r.id ? '2px solid var(--gold)' : '2px solid transparent', cursor: 'grab' }}
+          >
+            <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--ink-faint)', fontSize: 14, letterSpacing: -2 }}>⠿</span>
+            <span>📄</span><div><div className="ai-title">{r.title}</div><div className="ai-meta">PDF resource</div></div>
             <div className="sp" /><button className="mini-btn" onClick={() => setModal({ type: 'resource', data: r })}>Edit</button>
             <button className="mini-btn bad" onClick={() => del('resource', 'resource_id', r.id)}>Delete</button>
           </div>
@@ -460,7 +519,7 @@ function Content({ admin }) {
     <div>
       <div className="admin-tabs">{courseTabs.map((l) => <button key={l.id} className={course === l.id ? 'active' : ''} onClick={() => setCourse(l.id)}>{l.title}</button>)}</div>
       <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: '8px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ letterSpacing: -2 }}>⠿</span> Drag a lesson by its handle to reorder it — drop it on another lesson to place it there, or onto a section to move it into that section.
+        <span style={{ letterSpacing: -2 }}>⠿</span> Drag lessons and PDFs by the handle to reorder — drop on another item to place it there, or onto a section to move it across.
         {saving && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>Saving order…</span>}
       </p>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -1254,4 +1313,76 @@ function Row({ k, v, color }) {
 }
 function MiniStat({ v, l, color }) {
   return <div style={{ textAlign: 'center' }}><div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 600, color: color || 'var(--ink)' }}>{v}</div><div style={{ fontSize: 11, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '.3px' }}>{l}</div></div>;
+}
+
+function AuditLog({ admin }) {
+  const [data, setData] = useState(null);
+  const [who, setWho] = useState('');
+  const load = (actor) => call('admin_audit_log', { admin_id: admin.id, limit: 300, ...(actor ? { actor_id: actor } : {}) })
+    .then(setData).catch(() => setData({ log: [], admins: [] }));
+  useEffect(() => { load(who); }, [who]);
+  if (!data) return <div className="spinner" />;
+
+  const when = (ms) => {
+    const d = new Date(Number(ms));
+    const diff = Date.now() - Number(ms);
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+  const roleTag = (scope) => scope === 'manager' ? 'Manager' : scope === 'advanced' ? 'Mentor' : 'Owner';
+  const isRisky = (a) => ['admin_delete_user', 'admin_delete_video', 'admin_delete_section', 'admin_delete_homework', 'admin_delete_resource'].includes(a);
+  const isMoney = (a) => ['admin_set_billing', 'admin_record_payment'].includes(a);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Activity by</span>
+        <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3, flexWrap: 'wrap' }}>
+          <button onClick={() => setWho('')} style={{
+            cursor: 'pointer', padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
+            background: who === '' ? 'var(--ink)' : 'transparent', color: who === '' ? '#fff' : 'var(--ink-soft)',
+          }}>Everyone</button>
+          {(data.admins || []).map((a) => (
+            <button key={a.id} onClick={() => setWho(a.id)} style={{
+              cursor: 'pointer', padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
+              background: who === a.id ? 'var(--ink)' : 'transparent', color: who === a.id ? '#fff' : 'var(--ink-soft)',
+            }}>{a.name}</button>
+          ))}
+        </div>
+      </div>
+
+      {(data.log || []).length === 0 ? (
+        <div className="empty"><div className="big serif">Nothing yet</div><div>Admin actions will appear here as they happen.</div></div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="grid">
+            <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+            <tbody>
+              {data.log.map((r) => (
+                <tr key={r.id} style={isRisky(r.action) ? { background: 'rgba(192,71,63,.06)' } : undefined}>
+                  <td style={{ whiteSpace: 'nowrap', fontSize: 12, color: 'var(--ink-faint)' }}>{when(r.at)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{r.actor_name || '—'}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--ink-faint)' }}>{roleTag(r.actor_scope)}</div>
+                  </td>
+                  <td style={{ fontSize: 13 }}>
+                    {isRisky(r.action) && <span style={{ color: 'var(--red)', fontWeight: 700, marginRight: 6 }}>⚠</span>}
+                    {isMoney(r.action) && <span style={{ marginRight: 6 }}>💳</span>}
+                    {r.summary}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 10 }}>
+        Every admin action is recorded automatically — approvals, level changes, billing dates, payments, deletions and journal comments.
+        Only you can see this log. Showing the most recent 300 entries.
+      </p>
+    </div>
+  );
 }
