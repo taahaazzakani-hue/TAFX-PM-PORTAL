@@ -39,10 +39,10 @@ const CONTENT = {
           You must provide accurate registration details and keep your login credentials confidential. Accounts are personal: one account per student, for use on one device at a time, and access may not be shared, resold or redistributed. We may approve, decline, suspend or terminate accounts to protect the integrity of the Service, including for non-payment or sharing of content.
         </S>
         <S t="3. Subscription and billing">
-          Access to the Private Mentorship is billed at R830 per month, payable in advance. Where online payments are enabled, your subscription renews automatically each month until cancelled. If a payment is not received by its due date, access is paused until the account is settled.
+          Access to the Private Mentorship is R800 per month, payable in advance by EFT (bank transfer) to the account we provide in the portal. There is no automatic or online billing — you pay each month manually, and once your mentor confirms the transfer your access is extended for that month. If a payment is not received by its due date, access is paused until the account is settled.
         </S>
         <S t="4. Cancellation">
-          You may cancel at any time: message your mentor through the portal, email the contact address provided at sign-up, or cancel the subscription directly from your PayFast payment confirmation. Cancellation stops future billing; your access continues until the end of the period you have already paid for, after which it stops. Our Refund Policy governs refunds.
+          There is no automatic billing, so cancelling is simple: just let your mentor know, or stop paying the next month. Nothing is charged automatically. Your access continues until the end of the period you have already paid for, after which it stops. Our Refund Policy governs refunds.
         </S>
         <S t="5. Intellectual property">
           All course videos, documents, materials and platform content are our intellectual property (or licensed to us) and are provided for your personal, non-commercial use only. Downloading, recording, copying, publishing or sharing any content outside the platform is prohibited and grounds for immediate termination without refund.
@@ -67,7 +67,7 @@ const CONTENT = {
           If you are a new student and the Service is not what you expected, contact us within 7 days of your first payment and before completing a substantial portion of the content, and we will review your request for a refund of that first payment in good faith.
         </S>
         <S t="Renewals and cancellation">
-          Monthly renewals are not refundable. To avoid being charged for a month you don't want, cancel before your renewal date — cancellation is effective from the next billing cycle and you keep access until the end of the period you've paid for. If you believe you were billed in error (for example a duplicate charge), contact us and verified billing errors will be refunded in full.
+          Each month is paid manually in advance, so a month already paid for is not refundable. Because nothing is billed automatically, you are never charged for a month you don't want — simply don't pay the next month and your access ends when the paid period runs out. If you paid in error (for example paying twice for the same month), contact us and verified errors will be refunded in full.
         </S>
         <S t="How to request">
           Send your request, with the email address on your account and the payment reference, to your mentor via the portal or the contact details provided at sign-up. Approved refunds are returned to the original payment method within 7–14 business days.
@@ -100,47 +100,9 @@ export function LegalPage({ page }) {
   );
 }
 
-export function PaymentConsent({ onConfirm, onClose, busy, plan = 'pm', fee }) {
-  const [agreed, setAgreed] = React.useState(false);
-  const planName = plan === '1v1' ? '1v1 Mentorship' : 'Private Mentorship';
-  const amount = fee || (plan === '1v1' ? 2075 : 830);
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,30,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 18, maxWidth: 520, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '28px 28px 22px', boxShadow: 'var(--shadow-lg)' }}>
-        <h2 style={{ fontSize: 19, fontWeight: 800, marginBottom: 4 }}>Before you pay — please read</h2>
-        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 16 }}>{planName} subscription · R{amount} per month</div>
-
-        <div style={{ background: 'rgba(192,71,63,.07)', border: '1px solid rgba(192,71,63,.3)', borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>⚠️ Risk warning</div>
-          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-            Trading involves significant risk and <b>the majority of retail traders lose money</b>. This is an <b>educational service only</b> — not financial advice, not trade signals, and not account management. No results or income are guaranteed; all outcomes depend on your own decisions.
-          </div>
-        </div>
-
-        <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>Your subscription</div>
-          <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.7 }}>
-            • <b>R{amount}</b> billed now, then automatically every month until you cancel.<br />
-            • Cancel anytime — message your mentor or cancel via PayFast; billing stops and access continues to the end of the paid period.<br />
-            • Monthly renewals are non-refundable; first-payment refund requests within 7 days are reviewed per our <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>.
-          </div>
-        </div>
-
-        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--ink-soft)', cursor: 'pointer', marginBottom: 18 }}>
-          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} style={{ marginTop: 3 }} />
-          <span>
-            I have read and agree to the <a href="?page=terms" target="_blank" style={{ color: 'var(--gold-soft)' }}>Terms of Service</a>, <a href="?page=disclaimer" target="_blank" style={{ color: 'var(--gold-soft)' }}>Risk Disclaimer</a> and <a href="?page=refunds" target="_blank" style={{ color: 'var(--gold-soft)' }}>Refund Policy</a>, and I understand this is education only with no guaranteed results.
-          </span>
-        </label>
-
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="btn" onClick={onConfirm} disabled={!agreed || busy}>{busy ? 'Opening secure checkout…' : 'Agree & continue to payment'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// NOTE: The online-checkout consent modal (PaymentConsent) was removed together
+// with the PayFast/Paystack gateways. Payment is now a manual EFT; the banking
+// details shown to students live in PayInfo.jsx / payinfo.js.
 
 export function LegalFooter() {
   return (
