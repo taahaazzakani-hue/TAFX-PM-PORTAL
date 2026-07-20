@@ -5,6 +5,7 @@ import ImageGallery from './ImageGallery.jsx';
 
 const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', '1v1': '1v1' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MODELS = ['TA Model', 'Noctus Model', 'PM Session Model', 'TA Reversal Model', 'TA MMXM'];
 
 // Client-side stats (mirrors backend computeStats) so we can recompute for a filtered set of entries.
 function aggregate(entries) {
@@ -39,6 +40,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const [q, setQ] = useState('');
   const [tab, setTab] = useState('journal');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [modelFilter, setModelFilter] = useState('all');
   const [tagLib, setTagLib] = useState(user.journal_tags || []);
 
   async function createTag(name) {
@@ -70,9 +72,12 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const activeLevel = levelsToShow.includes(level) ? level : (levelsToShow[0] || 'beginner');
   const allLevelEntries = data.entries.filter((e) => e.level === activeLevel);
   // Filter by trade type. Entries saved before this feature default to 'live'.
-  const entries = typeFilter === 'all' ? allLevelEntries : allLevelEntries.filter((e) => (e.trade_type || 'live') === typeFilter);
-  // Recompute stats for the filtered set (backend stats cover all types together).
-  const stats = typeFilter === 'all' ? (data.stats[activeLevel] || computeStats(allLevelEntries)) : computeStats(entries);
+  const byType = typeFilter === 'all' ? allLevelEntries : allLevelEntries.filter((e) => (e.trade_type || 'live') === typeFilter);
+  // Then filter by model (All + each model).
+  const entries = modelFilter === 'all' ? byType : byType.filter((e) => (e.model || '') === modelFilter);
+  // Recompute stats for the filtered set (backend stats cover everything together).
+  const stats = (typeFilter === 'all' && modelFilter === 'all') ? (data.stats[activeLevel] || computeStats(allLevelEntries)) : computeStats(entries);
+  const modelCount = (m) => byType.filter((e) => (e.model || '') === m).length;
   const ql = q.trim().toLowerCase();
   const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || []), ...(e.tags || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
 
@@ -89,28 +94,41 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
 
   return (
     <div>
-      {/* Live / Backtest switch — filters the trade log, stats and analytics below */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Showing</span>
-        <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
-          {TYPE_TABS.map(([k, lbl]) => (
-            <button key={k} onClick={() => setTypeFilter(k)} style={{
-              cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
-              background: typeFilter === k ? 'var(--ink)' : 'transparent',
-              color: typeFilter === k ? '#fff' : 'var(--ink-soft)',
-              transition: 'background .15s',
-            }}>{lbl} <span style={{ opacity: .65, fontWeight: 600 }}>({countFor(k)})</span></button>
-          ))}
+      {/* Filters — hidden in the Sessions tab, which manages its own view */}
+      {tab !== 'sessions' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Showing</span>
+            <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
+              {TYPE_TABS.map(([k, lbl]) => (
+                <button key={k} onClick={() => setTypeFilter(k)} style={{
+                  cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
+                  background: typeFilter === k ? 'var(--ink)' : 'transparent',
+                  color: typeFilter === k ? '#fff' : 'var(--ink-soft)',
+                  transition: 'background .15s',
+                }}>{lbl} <span style={{ opacity: .65, fontWeight: 600 }}>({countFor(k)})</span></button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Model</span>
+            <select value={modelFilter} onChange={(e) => setModelFilter(e.target.value)}
+              style={{ background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--ink)', padding: '9px 12px', borderRadius: 9, fontSize: 13, fontWeight: 600, minWidth: 160 }}>
+              <option value="all">All models ({byType.length})</option>
+              {MODELS.map((m) => <option key={m} value={m}>{m} ({modelCount(m)})</option>)}
+            </select>
+            {modelFilter !== 'all' && <button className="mini-btn" style={{ margin: 0 }} onClick={() => setModelFilter('all')}>Clear</button>}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="admin-tabs">
         {levelsToShow.map((lv) => (<button key={lv} className={activeLevel === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
       </div>
 
-      {/* Journal / Analytics sub-tabs */}
+      {/* Journal / Analytics / Sessions sub-tabs */}
       <div style={{ display: 'flex', gap: 8, margin: '4px 0 20px', borderBottom: '1px solid var(--line)' }}>
-        {[['journal', '📓 Journal'], ['analytics', '📊 Analytics']].map(([k, lbl]) => (
+        {[['journal', '📓 Journal'], ['analytics', '📊 Analytics'], ...(readOnly ? [] : [['sessions', '🎯 Sessions']])].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', marginBottom: -1, fontSize: 14, fontWeight: 600,
             color: tab === k ? 'var(--gold)' : 'var(--ink-soft)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
@@ -118,8 +136,13 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
         ))}
       </div>
 
+      {modelFilter !== 'all' && tab !== 'sessions' && (
+        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+          Filtered to <b>{modelFilter}</b> · {entries.length} trade{entries.length !== 1 ? 's' : ''}{typeFilter !== 'all' ? ` · ${TYPE_TABS.find(([k]) => k === typeFilter)?.[1]}` : ''}
+        </div>
+      )}
 
-      {tab === 'journal' ? (
+      {tab === 'journal' && (
         <>
           <StatsSummary stats={stats} />
 
@@ -143,12 +166,20 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
             </div>
           )}
         </>
-      ) : (
+      )}
+
+      {tab === 'analytics' && (
         entries.length === 0 ? (
           <div className="empty"><div className="big serif">No data yet</div><div>Log some trades and your analytics will appear here.</div></div>
         ) : (
           <AnalyticsPanel stats={stats} entries={entries} onDay={(e) => setDetail(e)} />
         )
+      )}
+
+      {tab === 'sessions' && !readOnly && (
+        <SessionsPanel user={user} activeLevel={activeLevel} allEntries={data.entries}
+          confluences={confluences} tagLib={tagLib} onCreateTag={createTag} onDeleteTag={deleteTag}
+          onReload={load} onOpenDetail={(e) => setDetail(e)} />
       )}
 
       {showForm && <EntryForm entry={editing} confluences={confluences} tagLib={tagLib} onCreateTag={createTag} onDeleteTag={deleteTag} onSave={saveEntry} onClose={() => { setShowForm(false); setEditing(null); }} />}
@@ -542,8 +573,8 @@ function PnlCalendar({ entries, onDay }) {
   );
 }
 
-function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, onSave, onClose }) {
-  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', currency: 'ZAR', killzone: '', model: '', trade_type: 'live', confluences: [], tags: [], notes: '', images: [] });
+function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, onSave, onClose, forceType = null, sessionId = null }) {
+  const [f, setF] = useState(entry || { trade_date: Date.now(), pair: '', direction: 'long', outcome: 'win', pct: '', rr: '', amount: '', currency: 'ZAR', killzone: '', model: '', trade_type: forceType || 'live', ...(sessionId ? { session_id: sessionId } : {}), confluences: [], tags: [], notes: '', images: [] });
   const [newTag, setNewTag] = useState('');
   const [uploading, setUploading] = useState(false);
   const _d = new Date(Number(f.trade_date));
@@ -581,7 +612,7 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="serif">{entry ? 'Edit entry' : 'New journal entry'}</h3>
+        <h3 className="serif">{entry ? 'Edit entry' : (sessionId ? 'New backtest in this session' : 'New journal entry')}</h3>
         <div className="row2">
           <div className="field">
             <label>Date & time of entry</label>
@@ -622,12 +653,18 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
             </select>
           </div>
         </div>
-        <div className="field"><label>Trade type</label>
-          <select value={f.trade_type || 'live'} onChange={(e) => setF({ ...f, trade_type: e.target.value })}>
-            <option value="live">Live trade</option>
-            <option value="backtest">Backtest</option>
-          </select>
-        </div>
+        {forceType ? (
+          <div className="field"><label>Trade type</label>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', padding: '10px 0' }}>{forceType === 'backtest' ? '🧪 Backtest' : '🟢 Live'} · saved to this session</div>
+          </div>
+        ) : (
+          <div className="field"><label>Trade type</label>
+            <select value={f.trade_type || 'live'} onChange={(e) => setF({ ...f, trade_type: e.target.value })}>
+              <option value="live">Live trade</option>
+              <option value="backtest">Backtest</option>
+            </select>
+          </div>
+        )}
         <div className="field">
           <label>Confluences (TA Model)</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
@@ -702,6 +739,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           {entry.killzone && <span>🕐 {entry.killzone}</span>}
           {entry.model && <span>📐 {entry.model}</span>}
           <span>{(entry.trade_type || 'live') === 'backtest' ? '🧪 Backtest' : '🟢 Live'}</span>
+          {entry.session_id && <span>🎯 Session</span>}
           {(entry.tags || []).map((t) => <span key={t} className="pill" style={{ fontSize: 11 }}>🏷 {t}</span>)}
         </div>
         {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
@@ -726,6 +764,191 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           </div>
         ) : null}
         <div className="modal-actions" style={{ marginTop: 16 }}><button className="btn ghost" onClick={onClose}>Close</button></div>
+      </div>
+    </div>
+  );
+}
+
+// ── Backtest Sessions (FX-Replay style) ─────────────────────────────
+// A session is a named container a student logs backtest trades into over as
+// many days as it takes. Each session has its own analytics, scoped to just
+// its trades. Session trades are still normal backtests (they show in the
+// Backtest journal and count toward the monthly leaderboard).
+
+function fmtRange(entries) {
+  if (!entries.length) return 'No trades yet';
+  const ds = entries.map((e) => Number(e.trade_date || e.created_at)).sort((a, b) => a - b);
+  const a = new Date(ds[0]), b = new Date(ds[ds.length - 1]);
+  const f = (d) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return ds[0] === ds[ds.length - 1] || f(a) === f(b) ? f(a) : `${f(a)} – ${f(b)}`;
+}
+
+function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onCreateTag, onDeleteTag, onReload, onOpenDetail }) {
+  const [sessions, setSessions] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [editMeta, setEditMeta] = useState(null);
+  const [addTrade, setAddTrade] = useState(false);
+  const [editTrade, setEditTrade] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadSessions = () => call('sessions_list', { user_id: user.id })
+    .then((d) => setSessions(d.sessions || [])).catch(() => setSessions([]));
+  useEffect(() => { loadSessions(); }, [user.id]);
+
+  if (!sessions) return <div className="spinner" />;
+
+  const levelSessions = sessions.filter((s) => (s.level || activeLevel) === activeLevel);
+  const entriesOf = (sid) => allEntries.filter((e) => e.session_id === sid);
+  const open = openId ? levelSessions.find((s) => s.id === openId) : null;
+
+  async function saveSession(sess) {
+    setBusy(true);
+    try { await call('session_save', { user_id: user.id, session: { ...sess, level: sess.level || activeLevel } }); await loadSessions(); }
+    finally { setBusy(false); setShowNew(false); setEditMeta(null); }
+  }
+  async function setStatus(s, status) { await call('session_save', { user_id: user.id, session: { id: s.id, status } }); loadSessions(); }
+  async function removeSession(s) {
+    if (!confirm(`Delete session "${s.name}"?`)) return;
+    const n = entriesOf(s.id).length;
+    let delTrades = false;
+    if (n > 0) delTrades = confirm(`This session has ${n} backtest trade${n !== 1 ? 's' : ''}.\n\nOK = delete the session AND its trades.\nCancel = keep the trades in your backtest journal (remove the session only).`);
+    await call('session_delete', { user_id: user.id, session_id: s.id, delete_entries: delTrades });
+    setOpenId(null); await loadSessions();
+    if (delTrades) onReload();
+  }
+  async function saveTrade(entry) {
+    const lvl = (open?.level && (user.levels || []).includes(open.level)) ? open.level : activeLevel;
+    await call('journal_save', { user_id: user.id, entry: { ...entry, trade_type: 'backtest', session_id: open.id, level: lvl } });
+    setAddTrade(false); setEditTrade(null); onReload();
+  }
+  async function delTrade(id) { if (!confirm('Delete this backtest trade?')) return; await call('journal_delete', { user_id: user.id, entry_id: id }); onReload(); }
+
+  // ---- Detail view of one session ----
+  if (open) {
+    const es = entriesOf(open.id);
+    const stats = computeStats(es);
+    const done = open.status === 'completed';
+    return (
+      <div>
+        <button className="back-link" onClick={() => setOpenId(null)}>← All sessions</button>
+        <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h3 className="serif" style={{ margin: 0, fontSize: 24 }}>🎯 {open.name}</h3>
+              <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Completed' : 'Active'}</span>
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>
+              {open.instrument ? <b>{open.instrument}</b> : 'All instruments'} · {es.length} trade{es.length !== 1 ? 's' : ''} · {fmtRange(es)}
+            </div>
+            {open.notes && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8, whiteSpace: 'pre-wrap' }}>{open.notes}</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="mini-btn" style={{ margin: 0 }} onClick={() => setEditMeta(open)}>Edit</button>
+            <button className="mini-btn" style={{ margin: 0 }} onClick={() => setStatus(open, done ? 'active' : 'completed')}>{done ? 'Reopen' : 'Mark complete'}</button>
+            <button className="mini-btn bad" style={{ margin: 0 }} onClick={() => removeSession(open)}>Delete</button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', margin: '18px 0 14px' }}>
+          <h3 className="serif" style={{ fontSize: 20, fontWeight: 500 }}>Session analytics</h3>
+          <div style={{ flex: 1 }} />
+          <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => { setEditTrade(null); setAddTrade(true); }}>+ Log backtest</button>
+        </div>
+
+        {es.length === 0 ? (
+          <div className="empty"><div className="big serif">No trades in this session yet</div><div>Log your first backtest and this session's stats will build here — over as many days as you need.</div></div>
+        ) : (
+          <>
+            <StatsSummary stats={stats} />
+            {es.length > 1 && <AnalyticsPanel stats={stats} entries={es} onDay={(e) => onOpenDetail(e)} />}
+            <h3 className="serif" style={{ fontSize: 20, fontWeight: 500, margin: '22px 0 12px' }}>Session trade log</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[...es].sort((a, b) => Number(b.trade_date) - Number(a.trade_date)).map((e) => (
+                <TradeRow key={e.id} e={e} readOnly={false} onOpen={() => onOpenDetail(e)} onEdit={() => { setEditTrade(e); setAddTrade(true); }} onDel={() => delTrade(e.id)} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {addTrade && (
+          <EntryForm entry={editTrade} confluences={confluences} tagLib={tagLib} onCreateTag={onCreateTag} onDeleteTag={onDeleteTag}
+            forceType="backtest" sessionId={open.id} onSave={saveTrade} onClose={() => { setAddTrade(false); setEditTrade(null); }} />
+        )}
+        {editMeta && <SessionForm session={editMeta} busy={busy} onSave={saveSession} onClose={() => setEditMeta(null)} />}
+      </div>
+    );
+  }
+
+  // ---- List of sessions ----
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <h3 className="serif" style={{ fontSize: 22, fontWeight: 500 }}>Backtest sessions</h3>
+          <div className="hint" style={{ margin: 0 }}>Group a run of backtests into one named session — log into it over days, then read its analytics.</div>
+        </div>
+        <div style={{ flex: 1 }} />
+        <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => setShowNew(true)}>+ New session</button>
+      </div>
+
+      {levelSessions.length === 0 ? (
+        <div className="empty">
+          <div className="big serif">No sessions yet</div>
+          <div>Create a session (e.g. "NAS100 – London reversals") and log all its backtests in one place.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+          {levelSessions.map((s) => {
+            const es = entriesOf(s.id);
+            const st = computeStats(es);
+            const done = s.status === 'completed';
+            const pos = (st.cumPct || 0) >= 0;
+            return (
+              <div key={s.id} className="card" style={{ margin: 0, cursor: 'pointer' }} onClick={() => setOpenId(s.id)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {s.name}</div>
+                  <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Done' : 'Active'}</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>{s.instrument || 'All instruments'} · {fmtRange(es)}</div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 14 }}>
+                  <div><div style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600 }}>{st.trades}</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Trades</div></div>
+                  <div><div style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600 }}>{st.winRate}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Win</div></div>
+                  <div><div style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{st.cumPct}%</div><div style={{ fontSize: 10, color: 'var(--ink-faint)', textTransform: 'uppercase' }}>Net</div></div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginTop: 12 }}>Open session →</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showNew && <SessionForm session={null} busy={busy} onSave={saveSession} onClose={() => setShowNew(false)} />}
+    </div>
+  );
+}
+
+function SessionForm({ session, busy, onSave, onClose }) {
+  const [f, setF] = useState(session || { name: '', instrument: '', notes: '' });
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+        <h3 className="serif">{session ? 'Edit session' : 'New backtest session'}</h3>
+        <div className="field"><label>Session name</label>
+          <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder='e.g. NAS100 – London reversals' maxLength={80}
+            style={{ width: '100%', background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--ink)', padding: '11px 13px', borderRadius: 9, fontSize: 14 }} />
+        </div>
+        <div className="field"><label>Instrument (optional)</label>
+          <input value={f.instrument || ''} onChange={(e) => setF({ ...f, instrument: e.target.value })} placeholder="e.g. XAUUSD"
+            style={{ width: '100%', background: 'var(--panel)', border: '1px solid var(--line)', color: 'var(--ink)', padding: '11px 13px', borderRadius: 9, fontSize: 14 }} />
+        </div>
+        <div className="field"><label>Notes / plan (optional)</label>
+          <textarea value={f.notes || ''} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="What are you testing in this session?" />
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn" onClick={() => onSave(f)} disabled={busy || !(f.name || '').trim()}>{busy ? 'Saving…' : 'Save session'}</button>
+        </div>
       </div>
     </div>
   );
