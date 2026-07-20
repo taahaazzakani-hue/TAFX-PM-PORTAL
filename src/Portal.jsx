@@ -1,34 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { call, saveSession, refreshMe, paystackInit } from './api.js';
+import { call, saveSession, refreshMe } from './api.js';
+import { FEE_OF } from './payinfo.js';
+import { BankModal } from './PayInfo.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH3, TEACH4 } from './assets.js';
 import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy } from './Icons.jsx';
-import { PaymentConsent } from './Legal.jsx';
 import Leaderboard from './Leaderboard.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
-function PlanNotice({ track, plan, user }) {
-  const [paying, setPaying] = useState(false);
-  const [payErr, setPayErr] = useState('');
-  const [consent, setConsent] = useState(false);
+function PlanNotice({ track, plan }) {
+  const [showBank, setShowBank] = useState(false);
   if (!track || !track.active || track.status === 'ok' || track.status === 'none') return null;
   const label = plan === '1v1' ? '1v1 mentorship' : 'private mentorship';
-  const fee = track.fee || (plan === '1v1' ? 2075 : 830);
+  const fee = track.fee || FEE_OF(plan);
   const due = track.paid_until ? new Date(track.paid_until).toLocaleDateString() : '';
   const overdue = track.status === 'overdue';
-  async function payNow() {
-    setPaying(true); setPayErr('');
-    try {
-      const { url } = await paystackInit({ user_id: user.id, plan, return_url: window.location.origin });
-      window.location.href = url;
-    } catch (e) { setPayErr(e.message); setPaying(false); setConsent(false); }
-  }
   return (
     <div style={{
       borderRadius: 10, padding: '14px 18px', marginBottom: 12,
@@ -42,14 +34,13 @@ function PlanNotice({ track, plan, user }) {
           {plan === '1v1' ? '1v1' : 'PM'} {overdue ? 'subscription overdue' : `subscription due ${track.daysLeft === 0 ? 'today' : `in ${track.daysLeft} day${track.daysLeft > 1 ? 's' : ''}`}`}
         </div>
         <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-          Your R{fee} monthly {label} subscription {overdue ? `was due ${due}. Access will be limited until it's settled.` : `is due on ${due}.`}
-          {payErr && <span style={{ color: 'var(--red)' }}> {payErr}</span>}
+          Your R{fee} monthly {label} subscription {overdue ? `was due ${due}. Access stays limited until your EFT is received.` : `is due on ${due}. Pay by EFT to keep your access.`}
         </div>
       </div>
-      <button className="btn" onClick={() => setConsent(true)} disabled={paying} style={{ flex: 'none' }}>
-        {paying ? 'Opening…' : `Pay R${fee} now`}
+      <button className="btn" onClick={() => setShowBank(true)} style={{ flex: 'none' }}>
+        How to pay
       </button>
-      {consent && <PaymentConsent plan={plan} fee={fee} busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
+      {showBank && <BankModal plan={plan} due={due} overdue={overdue} onClose={() => setShowBank(false)} />}
     </div>
   );
 }
