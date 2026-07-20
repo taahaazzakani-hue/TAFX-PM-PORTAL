@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { call, saveSession, paystackInit } from './api.js';
-import { LegalFooter, PaymentConsent } from './Legal.jsx';
+import { call, saveSession } from './api.js';
+import { LegalFooter } from './Legal.jsx';
+import { BankModal } from './PayInfo.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
 
@@ -76,8 +77,7 @@ function LoginForm({ onAuthed, setMode }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [overdue, setOverdue] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const [consent, setConsent] = useState(false);
+  const [showBank, setShowBank] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
@@ -92,14 +92,6 @@ function LoginForm({ onAuthed, setMode }) {
     } finally { setBusy(false); }
   }
 
-  async function payNow() {
-    setPaying(true); setErr('');
-    try {
-      const { url } = await paystackInit({ email, return_url: window.location.origin });
-      window.location.href = url;
-    } catch (e) { setErr(e.message); setPaying(false); setConsent(false); }
-  }
-
   return (
     <div className="auth-card">
       <BrandMark />
@@ -107,11 +99,11 @@ function LoginForm({ onAuthed, setMode }) {
       <p className="lead">Sign in to the TA Forex Institute mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
       {overdue && (
-        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={() => setConsent(true)} disabled={paying}>
-          {paying ? 'Opening secure checkout…' : 'Pay R830 now to restore access'}
+        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={() => setShowBank(true)}>
+          How to pay & restore access
         </button>
       )}
-      {consent && <PaymentConsent busy={paying} onConfirm={payNow} onClose={() => setConsent(false)} />}
+      {showBank && <BankModal plan="pm" overdue onClose={() => setShowBank(false)} />}
       <form onSubmit={submit}>
         <div className="field">
           <label>Email</label>
