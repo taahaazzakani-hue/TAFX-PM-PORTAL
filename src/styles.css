@@ -152,6 +152,7 @@ input, textarea, select { font-family: inherit; }
 .dot-beginner { background: #6fae7d; }
 .dot-intermediate { background: var(--gold); }
 .dot-advanced { background: #b06a9c; }
+.dot-advanced2 { background: #8b6fc0; }
 .dot-original { background: #d4a337; }
 .nav-course .prog-mini { margin-left: auto; font-size: 11px; color: var(--ink-faint); }
 
