@@ -8,13 +8,14 @@ import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcCh
 
 const PORTAL_URL = window.location.origin;
 // Levels a client can be approved/assigned. Order = display order in pickers.
+// Short labels shown on the admin "assign levels" side. `full` is the hover tooltip.
 const LEVELS = [
-  { id: 'pm_original', level: 'original', title: 'TAFX Original' },
-  { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
-  { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
-  { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course' },
-  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced' },
-  { id: 'pm_1v1', level: '1v1', title: '1v1' },
+  { id: 'pm_original', level: 'original', title: 'T', full: 'TAFX Original' },
+  { id: 'pm_advanced', level: 'advanced', title: 'AC', full: 'TAFX Advanced Course' },
+  { id: 'pm_beginner', level: 'beginner', title: 'B', full: 'Beginner' },
+  { id: 'pm_intermediate', level: 'intermediate', title: 'I', full: 'Intermediate' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'A', full: 'Advanced' },
+  { id: 'pm_1v1', level: '1v1', title: '1', full: '1v1' },
 ];
 // Courses manageable in the Content tab. 1v1 is journal-only (no content),
 // so it is NOT listed here. TAFX Original IS a content course.
@@ -253,8 +254,8 @@ function Students({ admin }) {
                     <div style={{ display: 'flex', gap: 4 }}>
                       {LEVELS.map((l) => {
                         const on = (u.levels || []).includes(l.level);
-                        return <button key={l.id} title={l.title} onClick={() => setLevels(u.id, on ? u.levels.filter((x) => x !== l.level) : [...(u.levels || []), l.level])}
-                          style={{ width: 26, height: 26, borderRadius: 6, fontSize: 11, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'transparent', color: on ? '#fff' : 'var(--ink-faint)' }}>{l.title[0]}</button>;
+                        return <button key={l.id} title={l.full} onClick={() => setLevels(u.id, on ? u.levels.filter((x) => x !== l.level) : [...(u.levels || []), l.level])}
+                          style={{ minWidth: 26, height: 26, padding: '0 7px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'transparent', color: on ? '#fff' : 'var(--ink-faint)' }}>{l.title}</button>;
                       })}
                     </div>
                   </td>
@@ -287,7 +288,7 @@ function ApproveModal({ user, onClose, onConfirm, scoped }) {
         <div style={{ display: 'flex', gap: 10 }}>
           {LEVELS.map((l) => {
             const on = levels.includes(l.level);
-            return <button key={l.id} onClick={() => toggle(l.level)} style={{ flex: 1, padding: '14px 8px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink)', fontWeight: 600 }}>{l.title}</button>;
+            return <button key={l.id} title={l.full} onClick={() => toggle(l.level)} style={{ flex: 1, padding: '14px 8px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink)', fontWeight: 600 }}>{l.title}</button>;
           })}
         </div>
         <div className="modal-actions" style={{ marginTop: 20 }}>
