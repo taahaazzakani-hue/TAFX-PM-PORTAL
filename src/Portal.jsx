@@ -11,7 +11,7 @@ import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSea
 import Leaderboard from './Leaderboard.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
-const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced' };
+const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced', pm_advanced_2: 'advanced2' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
 function PlanNotice({ track, plan }) {
@@ -107,8 +107,8 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
   const originalCourse = courses.find((c) => c.level === 'original');
   const pmCourses = courses.filter((c) => c.level !== 'original');
-  const hasJournal = ['beginner', 'intermediate', 'advanced', '1v1'].some((l) => myLevels.includes(l));
-  const hasHomework = ['beginner', 'intermediate', 'advanced'].some((l) => myLevels.includes(l));
+  const hasJournal = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'].some((l) => myLevels.includes(l));
+  const hasHomework = ['beginner', 'intermediate', 'advanced', 'advanced2'].some((l) => myLevels.includes(l));
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
   const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
   const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
