@@ -12,7 +12,8 @@ const LEVELS = [
   { id: 'pm_original', level: 'original', title: 'TAFX Original' },
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
-  { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
+  { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced' },
   { id: 'pm_1v1', level: '1v1', title: '1v1' },
 ];
 // Courses manageable in the Content tab. 1v1 is journal-only (no content),
@@ -21,13 +22,15 @@ const CONTENT_COURSES = [
   { id: 'pm_original', level: 'original', title: 'TAFX Original' },
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
-  { id: 'pm_advanced', level: 'advanced', title: 'Advanced' },
+  { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced' },
 ];
 // Levels that have homework (journaling levels except 1v1 which is journal-only mentorship).
 const HOMEWORK_LEVELS = [
   { level: 'beginner', title: 'Beginner' },
   { level: 'intermediate', title: 'Intermediate' },
-  { level: 'advanced', title: 'Advanced' },
+  { level: 'advanced', title: 'TAFX Advanced Course' },
+  { level: 'advanced2', title: 'Advanced' },
 ];
 
 export default function Admin({ user, onLogout, onUpdated }) {
@@ -90,7 +93,8 @@ export default function Admin({ user, onLogout, onUpdated }) {
 const DASH_LEVELS = [
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner', dot: '#6fae7d' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate', dot: '#1f5fbf' },
-  { id: 'pm_advanced', level: 'advanced', title: 'Advanced', dot: '#b06a9c' },
+  { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course', dot: '#b06a9c' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced', dot: '#8b6fc0' },
 ];
 
 function AdminDashboard({ admin, goTo }) {
@@ -880,7 +884,7 @@ function Avatar({ url, name, size = 44 }) {
   );
 }
 
-const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', '1v1': '1v1' };
+const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced', '1v1': '1v1' };
 const CUR_SYM = (c) => (c === 'USD' ? '$' : 'R');
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1183,7 +1187,7 @@ function StudentProfile({ admin, studentId, onBack }) {
   const initials = (s.name || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
   const fmtDate = (ms) => ms ? new Date(Number(ms)).toLocaleString() : '—';
   const fmtDay = (ms) => ms ? new Date(Number(ms)).toLocaleDateString() : '—';
-  const LV = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+  const LV = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced' };
   const billMap = { overdue: { t: 'Overdue', c: 'var(--red)' }, due_soon: { t: `Due in ${b.daysLeft}d`, c: 'var(--gold)' }, ok: { t: 'Active', c: 'var(--green)' }, none: { t: 'Not on plan', c: 'var(--ink-faint)' } };
   const billTag = billMap[b.status] || billMap.none;
   const pct = data.totalVideos ? Math.round((data.watchedCount / data.totalVideos) * 100) : 0;
