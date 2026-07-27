@@ -4,13 +4,24 @@ const ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpY2VncGJqcHVscWJvbWtycnRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNjAzNzcsImV4cCI6MjA5ODczNjM3N30.gVcFzYWcBq_C8INPC7u7VIszFFuSR4dOZYbinrrLt5s';
 
 const API = `${SUPABASE_URL}/functions/v1/pm-api`;
+const BOOKINGS_API = `${SUPABASE_URL}/functions/v1/pm-bookings`;
 
 // NOTE: Online payment gateways (PayFast/Paystack) were removed. Subscriptions
 // are paid manually by EFT to the mentor; see payinfo.js for the details shown
 // to students, and the admin panel's "Record payment" for logging a payment.
 
 export async function call(action, body = {}) {
-  const res = await fetch(API, {
+  return post(API, action, body);
+}
+
+// 1v1 session bookings live in their own edge function (pm-bookings) so that
+// booking changes never touch pm-api, which handles login for every user.
+export async function callBookings(action, body = {}) {
+  return post(BOOKINGS_API, action, body);
+}
+
+async function post(url, action, body) {
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
