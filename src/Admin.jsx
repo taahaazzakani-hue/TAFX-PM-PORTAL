@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { call, uploadFile } from './api.js';
+import { call, callBookings, uploadFile } from './api.js';
 import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
-import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser } from './Icons.jsx';
+import { fmtSast, toSastInput, fromSastInput } from './Bookings.jsx';
+import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser, IcCalendar } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
 // Levels a client can be approved/assigned. Order = display order in pickers.
@@ -62,6 +63,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {!scoped && !manager && <T id="confluences" icon={<IcTag />} label="Confluences" />}
           {!scoped && !manager && <T id="overview" icon={<IcChart />} label="Overview" />}
           {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
+          {owner && <T id="bookings" icon={<IcCalendar />} label="1v1 Bookings" />}
           {owner && <T id="audit" icon={<IcClipboard />} label="Activity Log" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
@@ -71,7 +73,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
         </div>
       </aside>
       <main className="main">
-        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab}</h2></div>
+        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab === 'bookings' ? '1v1 Bookings' : tab}</h2></div>
         <div className="content">
           {tab === 'dashboard' && <AdminDashboard admin={user} goTo={setTab} />}
           {tab === 'students' && <Students admin={user} />}
@@ -82,6 +84,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'leaderboard' && <AdminLeaderboard admin={user} />}
           {tab === 'overview' && <Overview admin={user} />}
           {tab === 'billing' && <Billing admin={user} />}
+          {tab === 'bookings' && owner && <AdminBookings admin={user} />}
           {tab === 'audit' && owner && <AuditLog admin={user} />}
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
         </div>
@@ -1389,5 +1392,198 @@ function AuditLog({ admin }) {
         Only you can see this log. Showing the most recent 300 entries.
       </p>
     </div>
+  );
+}
+
+/* ---------- 1v1 BOOKINGS (owner only) ---------- */
+const BK_TAGS = {
+  pending: ['s-pending', 'Awaiting you'],
+  approved: ['s-approved', 'Confirmed'],
+  declined: ['s-rejected', 'Declined'],
+  cancelled: ['s-rejected', 'Cancelled by student'],
+};
+
+function AdminBookings({ admin }) {
+  const [rows, setRows] = useState(null);
+  const [filter, setFilter] = useState('pending');
+  const [acting, setActing] = useState(null); // { booking, decision }
+  const [err, setErr] = useState('');
+
+  const load = () =>
+    callBookings('admin_booking_list', { admin_id: admin.id })
+      .then((d) => setRows(d.bookings))
+      .catch((e) => { setErr(e.message); setRows([]); });
+
+  useEffect(() => { load(); }, []);
+  if (!rows) return <div className="spinner" />;
+
+  const nowMs = Date.now();
+  const buckets = {
+    pending: rows.filter((b) => b.status === 'pending'),
+    upcoming: rows.filter((b) => b.status === 'approved' && Number(b.slot_at) > nowMs),
+    past: rows.filter((b) => Number(b.slot_at) <= nowMs || ['declined', 'cancelled'].includes(b.status)),
+    all: rows,
+  };
+  const TABS = [
+    ['pending', 'Awaiting you'],
+    ['upcoming', 'Confirmed'],
+    ['past', 'Past & closed'],
+    ['all', 'All'],
+  ];
+  const list = buckets[filter] || [];
+
+  return (
+    <div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 14 }}>
+        All times shown in South African time (SAST), whatever timezone you're in.
+      </p>
+
+      <div className="admin-tabs">
+        {TABS.map(([id, label]) => (
+          <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>
+            {label} ({buckets[id].length})
+          </button>
+        ))}
+      </div>
+
+      {err && <div className="notice err" style={{ marginTop: 12 }}>{err}</div>}
+
+      {list.length === 0 ? (
+        <div className="empty" style={{ marginTop: 20 }}>
+          <div className="big serif">Nothing here</div>
+          <div>{filter === 'pending' ? 'No requests waiting on you.' : 'No sessions in this view yet.'}</div>
+        </div>
+      ) : (
+        list.map((b) => (
+          <BookingRow key={b.id} b={b}
+            onApprove={() => { setErr(''); setActing({ booking: b, decision: 'approved' }); }}
+            onDecline={() => { setErr(''); setActing({ booking: b, decision: 'declined' }); }} />
+        ))
+      )}
+
+      {acting && (
+        <DecideModal admin={admin} booking={acting.booking} decision={acting.decision}
+          onClose={() => setActing(null)}
+          onDone={() => { setActing(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+function BookingRow({ b, onApprove, onDecline }) {
+  const [cls, label] = BK_TAGS[b.status] || ['s-pending', b.status];
+  const st = b.student || {};
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Avatar url={st.avatar_url} name={st.name || '?'} size={34} />
+        <div style={{ minWidth: 160 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{st.name || 'Unknown student'}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+            {st.email}{st.phone ? ` · ${st.phone}` : ''}
+          </div>
+        </div>
+        <span className={`status-tag ${cls}`} style={{ marginLeft: 'auto' }}>{label}</span>
+      </div>
+
+      <h3 style={{ marginTop: 12 }}>{fmtSast(b.slot_at)}</h3>
+      <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+        {b.duration_min} min · requested {new Date(Number(b.created_at)).toLocaleDateString()}
+        {(st.levels || []).length > 0 && ` · ${st.levels.map((l) => LV_LABEL[l] || l).join(', ')}`}
+      </div>
+
+      <p style={{ color: 'var(--ink-soft)', fontSize: 14, marginTop: 10, whiteSpace: 'pre-wrap' }}>{b.topic}</p>
+      {b.student_note && (
+        <p style={{ color: 'var(--ink-faint)', fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.student_note}</p>
+      )}
+      {b.admin_note && (
+        <div className="notice info" style={{ marginTop: 12 }}><b>Your note:</b> {b.admin_note}</div>
+      )}
+      {b.meeting_link && (
+        <div style={{ fontSize: 13, marginTop: 8 }}>
+          <a href={b.meeting_link} target="_blank" rel="noreferrer">{b.meeting_link}</a>
+        </div>
+      )}
+
+      {b.status === 'pending' && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={onApprove}>Approve</button>
+          <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px' }} onClick={onDecline}>Decline</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DecideModal({ admin, booking, decision, onClose, onDone }) {
+  const approving = decision === 'approved';
+  const [when, setWhen] = useState(toSastInput(booking.slot_at));
+  const [link, setLink] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const slotMs = fromSastInput(when);
+  const moved = approving && slotMs && slotMs !== Number(booking.slot_at);
+
+  async function go() {
+    setBusy(true); setErr('');
+    try {
+      await callBookings('admin_booking_decide', {
+        admin_id: admin.id,
+        booking_id: booking.id,
+        decision,
+        slot_at: approving ? slotMs : undefined,
+        meeting_link: approving ? link.trim() : '',
+        admin_note: note.trim(),
+      });
+      onDone();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Modal title={approving ? 'Approve this session' : 'Decline this request'} onClose={onClose}>
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        <b>{booking.student?.name || 'Student'}</b> — {booking.duration_min} min<br />
+        {booking.topic}
+      </p>
+
+      {approving ? (
+        <>
+          <div className="field">
+            <label>Session time (SAST)</label>
+            <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+            {moved && (
+              <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginTop: 6 }}>
+                Changed from their requested time — they'll be told in the email.
+              </div>
+            )}
+          </div>
+          <div className="field">
+            <label>Meeting link (optional)</label>
+            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Zoom / Google Meet / Discord link" />
+          </div>
+          <div className="field">
+            <label>Note to the student (optional)</label>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Bring your journal for the last two weeks…" />
+          </div>
+        </>
+      ) : (
+        <div className="field">
+          <label>Reason (optional — sent to the student)</label>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="I'm away that week — try any afternoon the week after." />
+        </div>
+      )}
+
+      {err && <div className="notice err">{err}</div>}
+
+      <div className="modal-actions">
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={go} disabled={busy || (approving && !slotMs)}>
+          {busy ? 'Saving…' : approving ? 'Approve & email student' : 'Decline & email student'}
+        </button>
+      </div>
+    </Modal>
   );
 }
