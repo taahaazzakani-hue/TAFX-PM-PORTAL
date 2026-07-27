@@ -21,6 +21,7 @@ export const IcTrophy = () => <I><path d="M8 4h8v6a4 4 0 0 1-8 0V4z" /><path d="
 export const IcTag = () => <I><path d="M3.5 12.5 11 20a2 2 0 0 0 2.8 0l6.2-6.2a2 2 0 0 0 0-2.8L12.5 3.5H5a1.5 1.5 0 0 0-1.5 1.5v7.5z" /><circle cx="8.5" cy="8.5" r="1.4" /></I>;
 export const IcChart = () => <I><path d="M4 20V4M4 20h16" /><rect x="7.5" y="11" width="3" height="6" rx=".8" /><rect x="12.5" y="7" width="3" height="10" rx=".8" /><rect x="17.5" y="13" width="3" height="4" rx=".8" /></I>;
 export const IcCard = () => <I><rect x="3" y="5.5" width="18" height="13" rx="2.5" /><path d="M3 10h18M7 15h4" /></I>;
+export const IcCalendar = () => <I><rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 10h18M8 3v4M16 3v4" /><circle cx="8.5" cy="14.5" r="1.1" fill="currentColor" stroke="none" /></I>;
 export const IcSearch = () => <I size={15}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.8-3.8" /></I>;
 export const IcChevron = ({ open }) => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
