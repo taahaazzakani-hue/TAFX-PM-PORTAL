@@ -6,9 +6,10 @@ import { LOGO, TEACH1, TEACH2, TEACH3, TEACH4 } from './assets.js';
 import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
 import Bookings from './Bookings.jsx';
+import Broker from './Broker.jsx';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
-import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar } from './Icons.jsx';
+import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
@@ -173,6 +174,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Student Leaderboard" />}
           {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
           <NavItem id="bookings" icon={<IcCalendar />} label="Book a 1v1" />
+          <NavItem id="broker" icon={<IcTag />} label="Recommended Broker" />
           <NavItem id="calculator" icon={<IcPercent />} label="Risk Management" />
           <div className="sb-section-label">Account</div>
           <NavItem id="profile" icon={<IcUser />} label="Profile" />
@@ -189,7 +191,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Student Leaderboard' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : view === 'bookings' ? 'Book a 1v1' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Student Leaderboard' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : view === 'bookings' ? 'Book a 1v1' : view === 'broker' ? 'Recommended Broker' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} user={user} />
@@ -206,6 +208,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
           {view === 'bookings' && <Bookings user={user} />}
+          {view === 'broker' && <Broker />}
           {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
           {view === 'learn' && (
             courses.length === 0 ? (
