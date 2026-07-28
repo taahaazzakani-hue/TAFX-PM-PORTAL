@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { call, callBookings, uploadFile } from './api.js';
+import { call, callBookings, callSettings, uploadFile } from './api.js';
 import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
 import { fmtSast, toSastInput, fromSastInput, FilePicker, FileView } from './Bookings.jsx';
+import { BrokerAdmin } from './Broker.jsx';
 import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser, IcCalendar } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
@@ -64,6 +65,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {!scoped && !manager && <T id="overview" icon={<IcChart />} label="Overview" />}
           {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
           {owner && <T id="bookings" icon={<IcCalendar />} label="1v1 Bookings" />}
+          {owner && <T id="broker" icon={<IcTag />} label="Broker Page" />}
           {owner && <T id="audit" icon={<IcClipboard />} label="Activity Log" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
@@ -73,7 +75,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
         </div>
       </aside>
       <main className="main">
-        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab === 'bookings' ? '1v1 Bookings' : tab}</h2></div>
+        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab === 'bookings' ? '1v1 Bookings' : tab === 'broker' ? 'Broker Page' : tab}</h2></div>
         <div className="content">
           {tab === 'dashboard' && <AdminDashboard admin={user} goTo={setTab} />}
           {tab === 'students' && <Students admin={user} />}
@@ -85,6 +87,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'overview' && <Overview admin={user} />}
           {tab === 'billing' && <Billing admin={user} />}
           {tab === 'bookings' && owner && <AdminBookings admin={user} />}
+          {tab === 'broker' && owner && <BrokerAdmin admin={user} />}
           {tab === 'audit' && owner && <AuditLog admin={user} />}
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
         </div>
