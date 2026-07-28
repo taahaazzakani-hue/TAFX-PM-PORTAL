@@ -376,3 +376,144 @@ table.grid td { padding: 12px; border-bottom: 1px solid var(--line); vertical-al
 .course-card .foot { display: flex; align-items: center; margin-top: 14px; }
 .course-card .foot .pct { font-size: 12px; color: var(--ink-faint); }
 .course-card .foot .start { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--gold-soft); }
+
+/* ── Recommended broker page ─────────────────────────────────────────
+   Signature device is the tier ladder: accounts are a progression a
+   student climbs, not a menu they pick from, so the rail and rung
+   states carry real information about what to open first. */
+.brk-hero {
+  position: relative; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background:
+    radial-gradient(680px 300px at 85% -20%, rgba(31,95,191,.10), transparent 62%),
+    radial-gradient(520px 260px at 5% 110%, rgba(151,140,235,.10), transparent 60%),
+    var(--panel);
+  box-shadow: var(--shadow);
+  padding: 34px 32px;
+}
+.brk-hero-grid { display: grid; grid-template-columns: 1fr; gap: 26px; align-items: center; }
+@media (min-width: 760px) { .brk-hero-grid { grid-template-columns: 1.15fr .85fr; } }
+.brk-eyebrow {
+  font-size: 11px; letter-spacing: 4px; text-transform: uppercase;
+  color: var(--gold-soft); font-weight: 600;
+}
+.brk-hero h2 {
+  font-family: var(--serif); font-weight: 500; font-size: 40px; line-height: 1.08;
+  margin: 12px 0 0; letter-spacing: -.5px;
+}
+@media (max-width: 560px) { .brk-hero h2 { font-size: 31px; } .brk-hero { padding: 26px 20px; } }
+.brk-hero p { color: var(--ink-soft); font-size: 14.5px; line-height: 1.75; margin-top: 14px; }
+.brk-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.brk-chip {
+  font-size: 11.5px; color: var(--ink-soft); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
+}
+.brk-shot {
+  width: 100%; border-radius: var(--radius); border: 1px solid var(--line);
+  display: block; box-shadow: var(--shadow);
+}
+
+/* the ladder */
+.brk-ladder { position: relative; padding-left: 32px; margin-top: 10px; }
+.brk-ladder::before {
+  content: ''; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 2px;
+  background: linear-gradient(var(--gold) 0%, var(--gold) 40%, var(--line) 100%);
+  border-radius: 2px;
+}
+.brk-rung { position: relative; margin-bottom: 14px; }
+.brk-rung::before {
+  content: ''; position: absolute; left: -27px; top: 28px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--panel); border: 2px solid var(--line);
+}
+.brk-rung.on::before { border-color: var(--gold); box-shadow: 0 0 0 4px rgba(31,95,191,.13); }
+.brk-card {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel);
+  box-shadow: var(--shadow); padding: 22px 24px; transition: border-color .18s, transform .18s;
+}
+.brk-rung.on .brk-card { border-color: rgba(31,95,191,.42); }
+.brk-card:hover { transform: translateY(-1px); }
+@media (max-width: 560px) { .brk-card { padding: 18px 16px; } .brk-ladder { padding-left: 26px; } }
+.brk-card-top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brk-card h3 {
+  font-family: var(--serif); font-weight: 500; font-size: 27px; line-height: 1.1; margin: 0;
+}
+.brk-step {
+  font-size: 10.5px; letter-spacing: 2.5px; text-transform: uppercase; font-weight: 600;
+  color: var(--ink-faint);
+}
+.brk-rung.on .brk-step { color: var(--gold-soft); }
+.brk-min {
+  margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12.5px;
+  color: var(--ink-soft); white-space: nowrap;
+}
+.brk-for { font-size: 13px; color: var(--ink); margin-top: 8px; font-weight: 500; }
+.brk-card p { color: var(--ink-soft); font-size: 14px; line-height: 1.7; margin-top: 8px; }
+.brk-thumb {
+  width: 100%; max-width: 260px; border-radius: 10px; border: 1px solid var(--line);
+  margin-top: 14px; display: block;
+}
+
+/* Shield sits outside the ladder — it is an offer, not a tier */
+.brk-offer {
+  border: 1px solid rgba(31,95,191,.35); border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(31,95,191,.055), transparent 55%), var(--panel);
+  box-shadow: var(--shadow); overflow: hidden; margin-top: 12px;
+}
+.brk-offer-body { padding: 26px 28px; }
+@media (max-width: 560px) { .brk-offer-body { padding: 20px 17px; } }
+.brk-offer h3 {
+  font-family: var(--serif); font-weight: 500; font-size: 30px; margin: 10px 0 0; line-height: 1.12;
+}
+.brk-offer-img { width: 100%; display: block; border-bottom: 1px solid var(--line); }
+.brk-terms {
+  border-top: 1px solid var(--line); background: var(--panel-2);
+  padding: 16px 28px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.7;
+}
+@media (max-width: 560px) { .brk-terms { padding: 14px 17px; } }
+.brk-terms b { color: var(--ink); }
+.brk-terms ul { margin: 8px 0 0 16px; }
+.brk-terms li { margin-bottom: 3px; }
+
+.brk-section-head {
+  display: flex; align-items: baseline; gap: 14px; margin: 34px 0 14px;
+}
+.brk-section-head h3 { font-family: var(--serif); font-weight: 500; font-size: 25px; margin: 0; }
+.brk-section-head .rule { flex: 1; height: 1px; background: var(--line); }
+.brk-fine { font-size: 12px; color: var(--ink-faint); line-height: 1.7; margin-top: 14px; }
+
+.brk-rise { opacity: 0; transform: translateY(9px); animation: brkRise .5s ease forwards; }
+@keyframes brkRise { to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .brk-rise { animation: none; opacity: 1; transform: none; }
+  .brk-card:hover { transform: none; }
+}
+
+/* Dark hero variant — used when a broker banner is set. HFM's partner assets
+   are near-black, so the card goes dark and the image edge disappears into it
+   instead of sitting on white as a foreign rectangle. This is the one bold
+   surface on an otherwise light portal; keep it that way. */
+.brk-hero.dark {
+  border-color: #26303f;
+  background:
+    radial-gradient(620px 320px at 82% -15%, rgba(31,95,191,.26), transparent 62%),
+    radial-gradient(420px 260px at 0% 120%, rgba(151,140,235,.14), transparent 60%),
+    linear-gradient(158deg, #1b2431 0%, #0d1219 100%);
+  box-shadow: 0 18px 44px rgba(13,18,25,.22);
+}
+.brk-hero.dark .brk-eyebrow { color: #8ab6ff; }
+.brk-hero.dark h2 { color: #fff; }
+.brk-hero.dark p { color: rgba(255,255,255,.70); }
+.brk-hero.dark .brk-chip {
+  background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.78);
+}
+.brk-hero.dark .brk-shot {
+  border-color: rgba(255,255,255,.10); max-height: 360px; object-fit: contain;
+  background: #0b0f15; box-shadow: 0 20px 54px rgba(0,0,0,.5);
+}
+.brk-caption {
+  font-size: 12.5px; line-height: 1.7; margin-top: 18px;
+  padding-left: 13px; border-left: 2px solid var(--gold);
+  color: var(--ink-soft);
+}
+.brk-hero.dark .brk-caption { color: rgba(255,255,255,.62); border-left-color: #8ab6ff; }
