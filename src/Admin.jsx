@@ -4,7 +4,7 @@ import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
 import ImageGallery from './ImageGallery.jsx';
-import { fmtSast, toSastInput, fromSastInput } from './Bookings.jsx';
+import { fmtSast, toSastInput, fromSastInput, FilePicker, FileView } from './Bookings.jsx';
 import { IcGrid, IcUsers, IcVideo, IcClipboard, IcJournal, IcTrophy, IcTag, IcChart, IcCard, IcUser, IcCalendar } from './Icons.jsx';
 
 const PORTAL_URL = window.location.origin;
@@ -1405,13 +1405,15 @@ const BK_TAGS = {
 
 function AdminBookings({ admin }) {
   const [rows, setRows] = useState(null);
+  const [zoomOn, setZoomOn] = useState(false);
   const [filter, setFilter] = useState('pending');
-  const [acting, setActing] = useState(null); // { booking, decision }
+  const [acting, setActing] = useState(null);   // { booking, decision }
+  const [fb, setFb] = useState(null);           // booking being given feedback
   const [err, setErr] = useState('');
 
   const load = () =>
     callBookings('admin_booking_list', { admin_id: admin.id })
-      .then((d) => setRows(d.bookings))
+      .then((d) => { setRows(d.bookings); setZoomOn(!!d.zoom_configured); })
       .catch((e) => { setErr(e.message); setRows([]); });
 
   useEffect(() => { load(); }, []);
@@ -1421,21 +1423,28 @@ function AdminBookings({ admin }) {
   const buckets = {
     pending: rows.filter((b) => b.status === 'pending'),
     upcoming: rows.filter((b) => b.status === 'approved' && Number(b.slot_at) > nowMs),
-    past: rows.filter((b) => Number(b.slot_at) <= nowMs || ['declined', 'cancelled'].includes(b.status)),
+    debrief: rows.filter((b) => b.status === 'approved' && Number(b.slot_at) <= nowMs && !b.feedback_at),
+    past: rows.filter((b) => ['declined', 'cancelled'].includes(b.status) || (b.status === 'approved' && Number(b.slot_at) <= nowMs && b.feedback_at)),
     all: rows,
   };
   const TABS = [
     ['pending', 'Awaiting you'],
     ['upcoming', 'Confirmed'],
-    ['past', 'Past & closed'],
+    ['debrief', 'Needs feedback'],
+    ['past', 'Done & closed'],
     ['all', 'All'],
   ];
   const list = buckets[filter] || [];
 
   return (
     <div>
-      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 14 }}>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 6 }}>
         All times shown in South African time (SAST), whatever timezone you're in.
+      </p>
+      <p style={{ color: 'var(--ink-faint)', fontSize: 12, marginBottom: 14 }}>
+        {zoomOn
+          ? 'Zoom is connected — approving a request creates the meeting and sends the student the link automatically.'
+          : 'Zoom is not connected yet, so paste a meeting link by hand when you approve.'}
       </p>
 
       <div className="admin-tabs">
@@ -1455,24 +1464,31 @@ function AdminBookings({ admin }) {
         </div>
       ) : (
         list.map((b) => (
-          <BookingRow key={b.id} b={b}
+          <BookingRow key={b.id} b={b} zoomOn={zoomOn}
             onApprove={() => { setErr(''); setActing({ booking: b, decision: 'approved' }); }}
-            onDecline={() => { setErr(''); setActing({ booking: b, decision: 'declined' }); }} />
+            onDecline={() => { setErr(''); setActing({ booking: b, decision: 'declined' }); }}
+            onFeedback={() => { setErr(''); setFb(b); }} />
         ))
       )}
 
       {acting && (
-        <DecideModal admin={admin} booking={acting.booking} decision={acting.decision}
-          onClose={() => setActing(null)}
-          onDone={() => { setActing(null); load(); }} />
+        <DecideModal admin={admin} booking={acting.booking} decision={acting.decision} zoomOn={zoomOn}
+          onClose={() => setActing(null)} onDone={() => { setActing(null); load(); }} />
+      )}
+      {fb && (
+        <FeedbackModal admin={admin} booking={fb}
+          onClose={() => setFb(null)} onDone={() => { setFb(null); load(); }} />
       )}
     </div>
   );
 }
 
-function BookingRow({ b, onApprove, onDecline }) {
+function BookingRow({ b, zoomOn, onApprove, onDecline, onFeedback }) {
   const [cls, label] = BK_TAGS[b.status] || ['s-pending', b.status];
   const st = b.student || {};
+  const past = Number(b.slot_at) <= Date.now();
+  const canDebrief = b.status === 'approved';
+
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1496,26 +1512,48 @@ function BookingRow({ b, onApprove, onDecline }) {
       {b.student_note && (
         <p style={{ color: 'var(--ink-faint)', fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.student_note}</p>
       )}
-      {b.admin_note && (
-        <div className="notice info" style={{ marginTop: 12 }}><b>Your note:</b> {b.admin_note}</div>
-      )}
+
+      <FileView files={b.student_files} title="Sent by the student" />
+
+      {b.admin_note && <div className="notice info" style={{ marginTop: 12 }}><b>Your note:</b> {b.admin_note}</div>}
+
       {b.meeting_link && (
-        <div style={{ fontSize: 13, marginTop: 8 }}>
+        <div style={{ fontSize: 13, marginTop: 10 }}>
           <a href={b.meeting_link} target="_blank" rel="noreferrer">{b.meeting_link}</a>
+          {b.zoom_meeting_id && <span style={{ color: 'var(--ink-faint)', marginLeft: 8 }}>Zoom #{b.zoom_meeting_id}</span>}
         </div>
       )}
 
-      {b.status === 'pending' && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-          <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={onApprove}>Approve</button>
-          <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px' }} onClick={onDecline}>Decline</button>
+      {(b.feedback || (b.mentor_files || []).length > 0) && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--gold-soft)', marginBottom: 8 }}>
+            Feedback the student sees
+          </div>
+          {b.feedback && <p style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{b.feedback}</p>}
+          <FileView files={b.mentor_files} />
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        {b.status === 'pending' && (
+          <>
+            <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={onApprove}>
+              {zoomOn ? 'Approve & create Zoom' : 'Approve'}
+            </button>
+            <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px' }} onClick={onDecline}>Decline</button>
+          </>
+        )}
+        {canDebrief && (
+          <button className={b.feedback_at ? 'btn ghost' : 'btn'} style={{ width: 'auto', padding: '10px 18px' }} onClick={onFeedback}>
+            {b.feedback_at ? 'Edit feedback' : past ? 'Add feedback & files' : 'Add feedback early'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function DecideModal({ admin, booking, decision, onClose, onDone }) {
+function DecideModal({ admin, booking, decision, zoomOn, onClose, onDone }) {
   const approving = decision === 'approved';
   const [when, setWhen] = useState(toSastInput(booking.slot_at));
   const [link, setLink] = useState('');
@@ -1529,17 +1567,19 @@ function DecideModal({ admin, booking, decision, onClose, onDone }) {
   async function go() {
     setBusy(true); setErr('');
     try {
-      await callBookings('admin_booking_decide', {
-        admin_id: admin.id,
-        booking_id: booking.id,
-        decision,
+      const r = await callBookings('admin_booking_decide', {
+        admin_id: admin.id, booking_id: booking.id, decision,
         slot_at: approving ? slotMs : undefined,
         meeting_link: approving ? link.trim() : '',
         admin_note: note.trim(),
       });
+      if (approving && r.zoom === 'failed') {
+        setErr('Approved and the student was emailed, but Zoom would not create the meeting. Reopen this and paste a link by hand.');
+        setBusy(false);
+        return;
+      }
       onDone();
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
+    } catch (e) { setErr(e.message); setBusy(false); }
   }
 
   return (
@@ -1561,8 +1601,9 @@ function DecideModal({ admin, booking, decision, onClose, onDone }) {
             )}
           </div>
           <div className="field">
-            <label>Meeting link (optional)</label>
-            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Zoom / Google Meet / Discord link" />
+            <label>Meeting link {zoomOn ? '(leave blank to auto-create a Zoom meeting)' : '(optional)'}</label>
+            <input value={link} onChange={(e) => setLink(e.target.value)}
+              placeholder={zoomOn ? 'Leave empty and Zoom handles it' : 'Zoom / Google Meet / Discord link'} />
           </div>
           <div className="field">
             <label>Note to the student (optional)</label>
@@ -1579,9 +1620,66 @@ function DecideModal({ admin, booking, decision, onClose, onDone }) {
       {err && <div className="notice err">{err}</div>}
 
       <div className="modal-actions">
-        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn ghost" onClick={onClose}>Close</button>
         <button className="btn" onClick={go} disabled={busy || (approving && !slotMs)}>
           {busy ? 'Saving…' : approving ? 'Approve & email student' : 'Decline & email student'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function FeedbackModal({ admin, booking, onClose, onDone }) {
+  const [text, setText] = useState(booking.feedback || '');
+  const [files, setFiles] = useState(booking.mentor_files || []);
+  const [notify, setNotify] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function save() {
+    setBusy(true); setErr('');
+    try {
+      await callBookings('admin_booking_feedback', {
+        admin_id: admin.id, booking_id: booking.id,
+        feedback: text.trim(), mentor_files: files, notify,
+      });
+      onDone();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  }
+
+  return (
+    <Modal title="Session feedback" onClose={onClose}>
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        <b>{booking.student?.name || 'Student'}</b> — {fmtSast(booking.slot_at)}
+      </p>
+
+      {(booking.student_files || []).length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <FileView files={booking.student_files} title="What they sent you" />
+        </div>
+      )}
+
+      <div className="field">
+        <label>Feedback (the student sees this in their portal)</label>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={10} maxLength={8000}
+          placeholder={'What they did well\n\nWhat to fix\n\nWhat to work on before next session'} />
+        <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>{text.length}/8000</div>
+      </div>
+
+      <FilePicker files={files} setFiles={setFiles} max={12} folder="booking-feedback"
+        label="Marked-up charts, PDFs or resources for them" />
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '10px 0' }}>
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} style={{ width: 'auto' }} />
+        Email the student that their notes are ready
+      </label>
+
+      {err && <div className="notice err">{err}</div>}
+
+      <div className="modal-actions">
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={save} disabled={busy || (!text.trim() && files.length === 0)}>
+          {busy ? 'Saving…' : 'Save feedback'}
         </button>
       </div>
     </Modal>
