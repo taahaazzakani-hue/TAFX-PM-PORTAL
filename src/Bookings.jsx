@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { callBookings } from './api.js';
+import { callBookings, uploadImage, uploadFile } from './api.js';
+import ImageGallery from './ImageGallery.jsx';
 
 /* Times are stored as UTC epoch ms and always shown in SAST, so a student's
    booked slot never shifts with the mentor's location. SA has no DST, so the
@@ -15,12 +16,91 @@ export const toSastInput = (ms) => new Date(Number(ms) + SAST_OFFSET).toISOStrin
 export const fromSastInput = (v) => (v ? Date.parse(v + ':00+02:00') : null);
 
 const DURATIONS = [30, 45, 60, 90];
+const MAX_MB = 10;
 const STATUS_TAG = {
   pending: ['s-pending', 'Awaiting reply'],
   approved: ['s-approved', 'Confirmed'],
   declined: ['s-rejected', 'Declined'],
   cancelled: ['s-rejected', 'Cancelled'],
 };
+
+/* ---------- shared attachment components (also used by Admin.jsx) ---------- */
+
+// Uploads straight to the existing pm-journal bucket and hands back the
+// {url, kind, name, size} shape the backend validates.
+export function FilePicker({ files, setFiles, max = 8, folder = 'bookings', label }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function onPick(e) {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!picked.length) return;
+    setErr(''); setBusy(true);
+    const next = [...files];
+    for (const f of picked) {
+      if (next.length >= max) { setErr(`Up to ${max} files.`); break; }
+      if (f.size > MAX_MB * 1024 * 1024) { setErr(`${f.name} is over ${MAX_MB}MB.`); continue; }
+      const isImg = (f.type || '').startsWith('image/');
+      const isPdf = (f.type || '') === 'application/pdf';
+      if (!isImg && !isPdf) { setErr('Images and PDFs only.'); continue; }
+      try {
+        const url = isImg ? await uploadImage(f, folder) : await uploadFile(f, folder);
+        next.push({ url, kind: isImg ? 'image' : 'pdf', name: f.name, size: f.size });
+      } catch { setErr(`Couldn't upload ${f.name}.`); }
+    }
+    setFiles(next); setBusy(false);
+  }
+
+  return (
+    <div className="field">
+      <label>{label || 'Attach charts or PDFs (optional)'}</label>
+      <input type="file" multiple accept="image/*,application/pdf" onChange={onPick} disabled={busy || files.length >= max} />
+      <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>
+        {busy ? 'Uploading…' : `Images or PDFs, up to ${MAX_MB}MB each · ${files.length}/${max} added`}
+      </div>
+      {err && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 4 }}>{err}</div>}
+      {files.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          {files.map((f, i) => (
+            <div key={f.url} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--line)' }}>
+              <span style={{ opacity: .6 }}>{f.kind === 'pdf' ? 'PDF' : 'IMG'}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+              <button className="mini-btn" onClick={() => setFiles(files.filter((_, j) => j !== i))}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Images get the click-to-zoom gallery; PDFs get plain links.
+export function FileView({ files, title }) {
+  if (!files || files.length === 0) return null;
+  const imgs = files.filter((f) => f.kind === 'image');
+  const pdfs = files.filter((f) => f.kind !== 'image');
+  return (
+    <div style={{ marginTop: 12 }}>
+      {title && <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-faint)', marginBottom: 8 }}>{title}</div>}
+      {imgs.length > 0 && <ImageGallery images={imgs.map((f) => f.url)} />}
+      {pdfs.length > 0 && (
+        <div style={{ marginTop: imgs.length ? 10 : 0 }}>
+          {pdfs.map((f) => (
+            <a key={f.url} href={f.url} target="_blank" rel="noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+              <span style={{ opacity: .6 }}>PDF</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Open</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- student view ---------- */
 
 export default function Bookings({ user }) {
   const [data, setData] = useState(null);
@@ -40,7 +120,7 @@ export default function Bookings({ user }) {
     return (
       <div className="empty">
         <div className="big serif">1v1 sessions are part of Private Mentorship</div>
-        <div>Book a one-on-one with Taaha to work through your charts, your journal and your plan directly. Speak to your mentor about joining Private Mentorship to unlock it.</div>
+        <div>Book a one-on-one with Taaha to work through your charts, your journal and your plan directly — and get written feedback and resources afterwards. Speak to your mentor about joining Private Mentorship to unlock it.</div>
       </div>
     );
   }
@@ -61,8 +141,8 @@ export default function Bookings({ user }) {
         <div style={{ flex: 1, minWidth: 220 }}>
           <h3 style={{ marginBottom: 4 }}>Book a 1v1 with Taaha</h3>
           <p style={{ color: 'var(--ink-soft)', fontSize: 13 }}>
-            Propose a time that suits you. Your mentor confirms or declines it, and you'll get an email either way.
-            All times are South African time (SAST).
+            Propose a time that suits you and attach the charts you want reviewed. Your mentor confirms or declines,
+            and you'll get written feedback here after the session. All times are South African time (SAST).
           </p>
         </div>
         <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => { setErr(''); setOpen(true); }}>
@@ -86,41 +166,51 @@ export default function Bookings({ user }) {
         </>
       )}
 
-      {open && (
-        <RequestModal
-          user={user}
-          onClose={() => setOpen(false)}
-          onDone={() => { setOpen(false); load(); }}
-        />
-      )}
+      {open && <RequestModal user={user} onClose={() => setOpen(false)} onDone={() => { setOpen(false); load(); }} />}
     </div>
   );
 }
 
 function BookingCard({ b, onCancel }) {
   const [cls, label] = STATUS_TAG[b.status] || ['s-pending', b.status];
+  const mine = b.student_files || [];
+  const theirs = b.mentor_files || [];
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span className={`status-tag ${cls}`}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{b.duration_min} min</span>
-        {onCancel && (
-          <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={onCancel}>Cancel</button>
-        )}
+        {onCancel && <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={onCancel}>Cancel</button>}
       </div>
+
       <h3 style={{ marginTop: 10 }}>{fmtSast(b.slot_at)}</h3>
       <p style={{ color: 'var(--ink-soft)', fontSize: 14, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.topic}</p>
       {b.student_note && (
         <p style={{ color: 'var(--ink-faint)', fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.student_note}</p>
       )}
-      {b.admin_note && (
-        <div className="notice info" style={{ marginTop: 12 }}>
-          <b>From your mentor:</b> {b.admin_note}
-        </div>
-      )}
+
+      <FileView files={mine} title="What you sent" />
+
+      {b.admin_note && <div className="notice info" style={{ marginTop: 12 }}><b>From your mentor:</b> {b.admin_note}</div>}
+
       {b.status === 'approved' && b.meeting_link && (
         <a className="btn" style={{ width: 'auto', padding: '10px 18px', marginTop: 14, display: 'inline-block', textDecoration: 'none' }}
-          href={b.meeting_link} target="_blank" rel="noreferrer">Join the session</a>
+          href={b.meeting_link} target="_blank" rel="noreferrer">Join the Zoom session</a>
+      )}
+
+      {(b.feedback || theirs.length > 0) && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--gold-soft)', marginBottom: 8 }}>
+            Session feedback
+          </div>
+          {b.feedback && <p style={{ fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{b.feedback}</p>}
+          <FileView files={theirs} title={theirs.length ? 'Resources from your mentor' : null} />
+          {b.feedback_at && (
+            <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 10 }}>
+              Added {new Date(Number(b.feedback_at)).toLocaleDateString()}{b.feedback_by ? ` by ${b.feedback_by}` : ''}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -132,6 +222,7 @@ function RequestModal({ user, onClose, onDone }) {
   const [dur, setDur] = useState(60);
   const [topic, setTopic] = useState('');
   const [note, setNote] = useState('');
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -143,7 +234,7 @@ function RequestModal({ user, onClose, onDone }) {
     try {
       await callBookings('booking_request', {
         user_id: user.id, slot_at: slotMs, duration_min: dur,
-        topic: topic.trim(), student_note: note.trim(),
+        topic: topic.trim(), student_note: note.trim(), student_files: files,
       });
       onDone();
     } catch (e) { setErr(e.message); }
@@ -157,12 +248,9 @@ function RequestModal({ user, onClose, onDone }) {
 
         <div className="field">
           <label>Date &amp; time (SAST)</label>
-          <input type="datetime-local" value={when} min={toSastInput(earliest)}
-            onChange={(e) => setWhen(e.target.value)} />
+          <input type="datetime-local" value={when} min={toSastInput(earliest)} onChange={(e) => setWhen(e.target.value)} />
           {slotMs && slotMs < earliest && (
-            <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>
-              Please pick a time at least 12 hours from now.
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>Please pick a time at least 12 hours from now.</div>
           )}
         </div>
 
@@ -182,8 +270,11 @@ function RequestModal({ user, onClose, onDone }) {
         <div className="field">
           <label>Anything else your mentor should know? (optional)</label>
           <textarea value={note} maxLength={1000} onChange={(e) => setNote(e.target.value)}
-            placeholder="Pairs, screenshots you'll bring, specific questions…" />
+            placeholder="Pairs, specific questions…" />
         </div>
+
+        <FilePicker files={files} setFiles={setFiles} max={8} folder="bookings"
+          label="Charts or PDFs to review (optional)" />
 
         {err && <div className="notice err">{err}</div>}
         <p style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
