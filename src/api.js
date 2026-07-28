@@ -5,6 +5,7 @@ const ANON_KEY =
 
 const API = `${SUPABASE_URL}/functions/v1/pm-api`;
 const BOOKINGS_API = `${SUPABASE_URL}/functions/v1/pm-bookings`;
+const SETTINGS_API = `${SUPABASE_URL}/functions/v1/pm-settings`;
 
 // NOTE: Online payment gateways (PayFast/Paystack) were removed. Subscriptions
 // are paid manually by EFT to the mentor; see payinfo.js for the details shown
@@ -18,6 +19,11 @@ export async function call(action, body = {}) {
 // booking changes never touch pm-api, which handles login for every user.
 export async function callBookings(action, body = {}) {
   return post(BOOKINGS_API, action, body);
+}
+
+// Admin-editable portal content (recommended broker page) lives in pm_settings.
+export async function callSettings(action, body = {}) {
+  return post(SETTINGS_API, action, body);
 }
 
 async function post(url, action, body) {
