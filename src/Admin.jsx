@@ -1695,7 +1695,7 @@ function FeedbackModal({ admin, booking, onClose, onDone }) {
 const DOW = [['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 const DEFAULT_HOURS = {
   windows: [{ start: '08:00', end: '12:00' }, { start: '16:00', end: '19:00' }],
-  days: [1, 2, 3, 4, 5], granularity_min: 30, min_notice_hours: 1, max_days_ahead: 60,
+  days: [1, 2, 3, 4, 5], granularity_min: 30, min_notice_hours: 1, max_days_ahead: 60, overrides: {},
 };
 
 function AvailabilityCard({ admin }) {
@@ -1704,6 +1704,7 @@ function AvailabilityCard({ admin }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [newDate, setNewDate] = useState('');
 
   useEffect(() => {
     callSettings('settings_get', { key: 'booking_hours' })
@@ -1736,6 +1737,7 @@ function AvailabilityCard({ admin }) {
           <b style={{ fontSize: 14 }}>Your availability</b>
           <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
             {summary || 'No windows set'} · {dayNames || 'no days'} · SAST
+            {Object.keys(h.overrides || {}).length > 0 && ` · ${Object.keys(h.overrides).length} one-off day(s)`}
           </div>
         </div>
         <button className="mini-btn" onClick={() => setOpen(!open)}>{open ? 'Close' : 'Edit'}</button>
@@ -1799,6 +1801,63 @@ function AvailabilityCard({ admin }) {
               <select value={h.max_days_ahead} onChange={(e) => set({ max_days_ahead: Number(e.target.value) })}>
                 {[14, 30, 60, 90].map((n) => <option key={n} value={n}>{n} days ahead</option>)}
               </select>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+            <b style={{ fontSize: 13 }}>One-off days</b>
+            <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: '4px 0 12px' }}>
+              Override a single date — extra hours, different hours, or no hours at all.
+              Overrides beat the weekly pattern completely. Use an empty list for a day off.
+            </p>
+
+            {Object.entries(h.overrides || {}).sort().map(([d, wins]) => (
+              <div key={d} className="card" style={{ padding: 14, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <b style={{ flex: 1, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{d}</b>
+                  <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+                    {(wins || []).length === 0 ? 'Closed all day' : `${wins.length} window(s)`}
+                  </span>
+                  <button className="mini-btn" onClick={() => {
+                    const next = { ...h.overrides }; delete next[d]; set({ overrides: next });
+                  }}>Delete</button>
+                </div>
+                {(wins || []).map((w, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 8 }}>
+                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                      <label>Start</label>
+                      <input type="time" value={w.start || ''} onChange={(e) => {
+                        const nw = [...wins]; nw[i] = { ...nw[i], start: e.target.value };
+                        set({ overrides: { ...h.overrides, [d]: nw } });
+                      }} />
+                    </div>
+                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                      <label>End</label>
+                      <input type="time" value={w.end || ''} onChange={(e) => {
+                        const nw = [...wins]; nw[i] = { ...nw[i], end: e.target.value };
+                        set({ overrides: { ...h.overrides, [d]: nw } });
+                      }} />
+                    </div>
+                    <button className="mini-btn" style={{ marginBottom: 10 }} onClick={() => {
+                      set({ overrides: { ...h.overrides, [d]: wins.filter((_, j) => j !== i) } });
+                    }}>Remove</button>
+                  </div>
+                ))}
+                <button className="mini-btn" onClick={() => {
+                  set({ overrides: { ...h.overrides, [d]: [...(wins || []), { start: '09:00', end: '12:00' }] } });
+                }}>+ Add a window to this day</button>
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Add a one-off day</label>
+                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+              </div>
+              <button className="mini-btn" style={{ marginBottom: 10 }} disabled={!newDate} onClick={() => {
+                set({ overrides: { ...(h.overrides || {}), [newDate]: [{ start: '09:00', end: '12:00' }] } });
+                setNewDate('');
+              }}>Add</button>
             </div>
           </div>
 
