@@ -1882,137 +1882,209 @@ function AvailabilityCard({ admin }) {
   );
 }
 
-/* ---------- month calendar for 1v1 bookings ---------- */
+
+/* ---------- 1v1 schedule: week grid + month overview ---------- */
 const SAST_MS = 2 * 3600000;
+const HOUR_H = 44;
 const dayKey = (ms) => new Date(Number(ms) + SAST_MS).toISOString().slice(0, 10);
+const keyNoon = (k) => new Date(k + 'T12:00:00+02:00');
+const shiftKey = (k, n) => dayKey(keyNoon(k).getTime() + n * 86400000);
+const dowOf = (k) => keyNoon(k).getUTCDay();
+const minsOf = (ms) => { const d = new Date(Number(ms) + SAST_MS); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
 const hhmm = (ms) => new Date(Number(ms)).toLocaleTimeString('en-ZA', {
-  timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false,
-});
+  timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false });
+const toMin = (s) => { const [h, m] = String(s).split(':').map(Number); return (h || 0) * 60 + (m || 0); };
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW_LABELS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 function BookingCalendar({ rows, hours }) {
   const todayKey = dayKey(Date.now());
-  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
-  const [sel, setSel] = useState(todayKey);
-  const [open, setOpen] = useState(true);
+  const [view, setView] = useState('week');
+  const [anchor, setAnchor] = useState(todayKey);
+  const [sel, setSel] = useState(null);
+  const [tick, setTick] = useState(0);
 
-  // Only live bookings belong on a calendar; declined and cancelled are noise.
+  // keeps the red "now" line honest without a full reload
+  useEffect(() => { const t = setInterval(() => setTick((n) => n + 1), 60000); return () => clearInterval(t); }, []);
+
   const live = (rows || []).filter((b) => ['pending', 'approved'].includes(b.status));
   const byDay = {};
   for (const b of live) (byDay[dayKey(b.slot_at)] ||= []).push(b);
   for (const k of Object.keys(byDay)) byDay[k].sort((a, b) => a.slot_at - b.slot_at);
 
-  // next 7 days summary
-  const wk = live.filter((b) => {
-    const d = Number(b.slot_at) - Date.now();
-    return d >= 0 && d <= 7 * 86400000;
-  });
-  const wkPending = wk.filter((b) => b.status === 'pending').length;
-  const wkOk = wk.length - wkPending;
-
-  const first = new Date(Date.UTC(cursor.y, cursor.m, 1));
-  const startPad = (first.getUTCDay() + 6) % 7;             // Monday-first
-  const daysInMonth = new Date(Date.UTC(cursor.y, cursor.m + 1, 0)).getUTCDate();
-  const openDays = hours?.days || [1, 2, 3, 4, 5];
-  const overrides = hours?.overrides || {};
-
-  const cells = [];
-  for (let i = 0; i < startPad; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    const k = `${cursor.y}-${String(cursor.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dow = new Date(Date.UTC(cursor.y, cursor.m, d)).getUTCDay();
-    const hasOv = Object.prototype.hasOwnProperty.call(overrides, k);
-    const isOpen = hasOv ? (overrides[k] || []).length > 0 : openDays.includes(dow);
-    cells.push({ k, d, isOpen });
-  }
-
-  const shift = (n) => {
-    const m = cursor.m + n;
-    setCursor({ y: cursor.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 });
+  // availability for one date — per-date overrides beat the weekly pattern
+  const winsFor = (k) => {
+    const ov = hours?.overrides || {};
+    if (Object.prototype.hasOwnProperty.call(ov, k)) return ov[k] || [];
+    return (hours?.days || [1, 2, 3, 4, 5]).includes(dowOf(k)) ? (hours?.windows || []) : [];
   };
 
-  const selList = byDay[sel] || [];
+  const mondayOf = (k) => shiftKey(k, -((dowOf(k) + 6) % 7));
+  const weekKeys = Array.from({ length: 7 }, (_, i) => shiftKey(mondayOf(anchor), i));
+
+  // vertical range: cover every window plus every booking on screen, padded an hour
+  let lo = 24 * 60, hi = 0;
+  for (const k of weekKeys) {
+    for (const w of winsFor(k)) { lo = Math.min(lo, toMin(w.start)); hi = Math.max(hi, toMin(w.end)); }
+    for (const b of (byDay[k] || [])) {
+      lo = Math.min(lo, minsOf(b.slot_at));
+      hi = Math.max(hi, minsOf(b.slot_at) + b.duration_min);
+    }
+  }
+  if (lo > hi) { lo = 8 * 60; hi = 19 * 60; }
+  lo = Math.max(0, Math.floor(lo / 60) * 60 - 60);
+  hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60 + 60);
+  const hoursList = Array.from({ length: (hi - lo) / 60 }, (_, i) => lo / 60 + i);
+  const yOf = (mins) => ((mins - lo) / 60) * HOUR_H;
+
+  const wk = live.filter((b) => { const d = Number(b.slot_at) - Date.now(); return d >= 0 && d <= 7 * 86400000; });
+  const wkPending = wk.filter((b) => b.status === 'pending').length;
+
+  const nowMins = minsOf(Date.now());
+  const showNow = weekKeys.includes(todayKey) && nowMins >= lo && nowMins <= hi;
+
+  const step = (n) => setAnchor(view === 'week' ? shiftKey(anchor, n * 7) : shiftKey(anchor, n * 30));
+  const title = view === 'week'
+    ? (() => {
+        const a = keyNoon(weekKeys[0]), b = keyNoon(weekKeys[6]);
+        const sameM = a.getUTCMonth() === b.getUTCMonth();
+        return `${a.getUTCDate()} – ${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]} ${b.getUTCFullYear()}`
+          .replace(sameM ? '' : '\u0000', '');
+      })()
+    : `${MONTHS[keyNoon(anchor).getUTCMonth()]} ${keyNoon(anchor).getUTCFullYear()}`;
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <b style={{ fontSize: 14 }}>Your schedule</b>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3 }}>
-            Next 7 days: {wkOk} confirmed{wkPending > 0 && `, ${wkPending} awaiting you`}
-            {wk.length === 0 && 'nothing booked'}
-          </div>
+    <div className="gcal">
+      <div className="gcal-bar">
+        <button className="gcal-nav" onClick={() => step(-1)}>‹</button>
+        <button className="gcal-nav" onClick={() => step(1)}>›</button>
+        <h4 className="gcal-title">{title}</h4>
+        <button className="mini-btn" onClick={() => { setAnchor(todayKey); setSel(null); }}>Today</button>
+        <div className="gcal-seg" style={{ marginLeft: 'auto' }}>
+          <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Week</button>
+          <button className={view === 'month' ? 'on' : ''} onClick={() => setView('month')}>Month</button>
         </div>
-        <button className="mini-btn" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'}</button>
       </div>
 
-      {open && (
-        <div style={{ marginTop: 16 }}>
-          <div className="cal-head">
-            <button className="mini-btn" onClick={() => shift(-1)}>←</button>
-            <h4 className="cal-title">{MONTHS[cursor.m]} {cursor.y}</h4>
-            <button className="mini-btn" onClick={() => shift(1)}>→</button>
-            <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={() => {
-              const d = new Date();
-              setCursor({ y: d.getFullYear(), m: d.getMonth() });
-              setSel(todayKey);
-            }}>Today</button>
-          </div>
-
-          <div className="cal-grid">
-            {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => <div key={d} className="cal-dow">{d}</div>)}
-            {cells.map((c, i) => c === null
-              ? <div key={`p${i}`} className="cal-cell out" />
-              : (
-                <button key={c.k} type="button"
-                  className={`cal-cell ${c.isOpen ? 'open' : ''} ${c.k === todayKey ? 'today' : ''} ${c.k === sel ? 'sel' : ''}`}
-                  onClick={() => setSel(c.k)}>
-                  <span className="cal-num">{c.d}</span>
-                  {(byDay[c.k] || []).slice(0, 2).map((b) => (
-                    <span key={b.id} className={`cal-ev ${b.status === 'approved' ? 'ok' : 'pend'}`}>
-                      {hhmm(b.slot_at)}
-                    </span>
-                  ))}
-                  {(byDay[c.k] || []).length > 2 && (
-                    <span className="cal-more">+{byDay[c.k].length - 2} more</span>
-                  )}
-                </button>
-              ))}
-          </div>
-
-          <div className="cal-key">
-            <span><i style={{ background: 'var(--gold)' }} />Confirmed</span>
-            <span><i style={{ border: '1px dashed var(--gold-soft)' }} />Awaiting you</span>
-            <span><i style={{ background: 'var(--panel-2)', border: '1px solid var(--line)' }} />You take sessions</span>
-          </div>
-
-          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
-            <b style={{ fontSize: 13 }}>
-              {new Date(sel + 'T12:00:00+02:00').toLocaleDateString('en-ZA', {
-                weekday: 'long', day: 'numeric', month: 'long',
-              })}
-            </b>
-            {selList.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 6 }}>Nothing booked this day.</p>
-            ) : (
-              selList.map((b) => (
-                <div key={b.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                  <b style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13.5, minWidth: 46 }}>{hhmm(b.slot_at)}</b>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5 }}>{b.student?.name || 'Unknown student'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {b.duration_min} min · {b.topic}
-                    </div>
-                  </div>
-                  <span className={`status-tag ${b.status === 'approved' ? 's-approved' : 's-pending'}`}>
-                    {b.status === 'approved' ? 'Confirmed' : 'Awaiting you'}
-                  </span>
+      {view === 'week' ? (
+        <div className="gcal-scroll">
+          <div className="gcal-inner">
+            <div className="gcal-head">
+              <div className="gcal-dh" />
+              {weekKeys.map((k, i) => (
+                <div key={k} className={`gcal-dh ${k === todayKey ? 'today' : ''}`}>
+                  <div className="dow">{DOW_LABELS[i]}</div>
+                  <div className="num">{keyNoon(k).getUTCDate()}</div>
                 </div>
-              ))
-            )}
+              ))}
+            </div>
+
+            <div className="gcal-grid">
+              {showNow && <div className="gcal-now" style={{ top: yOf(nowMins) }} />}
+
+              <div className="gcal-gutter">
+                {hoursList.map((h) => (
+                  <div key={h} className="gcal-hr">{String(h).padStart(2, '0')}:00</div>
+                ))}
+              </div>
+
+              {weekKeys.map((k) => (
+                <div key={k} className="gcal-col">
+                  {hoursList.map((h) => <div key={h} className="gcal-line" />)}
+
+                  {winsFor(k).map((w, i) => (
+                    <div key={i} className="gcal-avail"
+                      style={{ top: yOf(toMin(w.start)), height: ((toMin(w.end) - toMin(w.start)) / 60) * HOUR_H }} />
+                  ))}
+
+                  {(byDay[k] || []).map((b) => {
+                    const top = yOf(minsOf(b.slot_at));
+                    const h = Math.max(17, (b.duration_min / 60) * HOUR_H - 2);
+                    return (
+                      <button key={b.id} type="button"
+                        className={`gcal-ev ${b.status === 'approved' ? 'ok' : 'pend'} ${sel?.id === b.id ? 'sel' : ''}`}
+                        style={{ top, height: h }}
+                        onClick={() => setSel(b)}>
+                        <b>{hhmm(b.slot_at)}</b>
+                        {h > 30 && <span>{b.student?.name || 'Unknown'}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+      ) : (
+        <MonthGrid anchor={anchor} todayKey={todayKey} byDay={byDay} winsFor={winsFor}
+          onPick={(k) => { setAnchor(k); setView('week'); }} />
       )}
+
+      <div className="gcal-foot">
+        <div className="gcal-key">
+          <span><i style={{ background: 'var(--gold)' }} />Confirmed</span>
+          <span><i style={{ border: '1px dashed var(--gold)' }} />Awaiting you</span>
+          <span><i style={{ background: 'rgba(31,95,191,.12)' }} />Your available hours</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
+          Next 7 days: {wk.length - wkPending} confirmed{wkPending > 0 && `, ${wkPending} awaiting you`}
+          {wk.length === 0 && 'nothing booked'}
+        </div>
+
+        {sel && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+              <b style={{ fontVariantNumeric: 'tabular-nums' }}>{hhmm(sel.slot_at)}</b>
+              <span style={{ fontSize: 13 }}>{sel.student?.name || 'Unknown student'}</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{sel.duration_min} min</span>
+              <span className={`status-tag ${sel.status === 'approved' ? 's-approved' : 's-pending'}`}
+                style={{ marginLeft: 'auto' }}>
+                {sel.status === 'approved' ? 'Confirmed' : 'Awaiting you'}
+              </span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>{sel.topic}</p>
+            {sel.student?.email && (
+              <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>
+                {sel.student.email}{sel.student.phone ? ` · ${sel.student.phone}` : ''}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MonthGrid({ anchor, todayKey, byDay, winsFor, onPick }) {
+  const y = keyNoon(anchor).getUTCFullYear();
+  const m = keyNoon(anchor).getUTCMonth();
+  const pad = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7;
+  const total = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+
+  const cells = [];
+  for (let i = 0; i < pad; i++) cells.push(null);
+  for (let d = 1; d <= total; d++) cells.push(`${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+
+  return (
+    <div className="gcal-m">
+      {DOW_LABELS.map((d) => <div key={d} className="gcal-mh">{d}</div>)}
+      {cells.map((k, i) => k === null
+        ? <div key={`p${i}`} className="gcal-mc out" />
+        : (
+          <button key={k} type="button"
+            className={`gcal-mc ${winsFor(k).length ? 'open' : ''} ${k === todayKey ? 'today' : ''}`}
+            onClick={() => onPick(k)}>
+            <span className="mnum">{keyNoon(k).getUTCDate()}</span>
+            {(byDay[k] || []).slice(0, 3).map((b) => (
+              <span key={b.id} className={`gcal-pill ${b.status === 'approved' ? 'ok' : 'pend'}`}>
+                {hhmm(b.slot_at)} {b.student?.name?.split(' ')[0] || ''}
+              </span>
+            ))}
+            {(byDay[k] || []).length > 3 && (
+              <span style={{ fontSize: 9.5, color: 'var(--ink-faint)' }}>+{byDay[k].length - 3} more</span>
+            )}
+          </button>
+        ))}
     </div>
   );
 }
