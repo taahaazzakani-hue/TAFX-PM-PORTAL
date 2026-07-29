@@ -64,7 +64,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {!scoped && !manager && <T id="confluences" icon={<IcTag />} label="Confluences" />}
           {!scoped && !manager && <T id="overview" icon={<IcChart />} label="Overview" />}
           {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
-          {owner && <T id="bookings" icon={<IcCalendar />} label="1v1 Bookings" />}
+          {(owner || scoped) && <T id="bookings" icon={<IcCalendar />} label="1v1 Bookings" />}
           {owner && <T id="broker" icon={<IcTag />} label="Broker Page" />}
           {owner && <T id="audit" icon={<IcClipboard />} label="Activity Log" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
@@ -86,7 +86,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'leaderboard' && <AdminLeaderboard admin={user} />}
           {tab === 'overview' && <Overview admin={user} />}
           {tab === 'billing' && <Billing admin={user} />}
-          {tab === 'bookings' && owner && <AdminBookings admin={user} />}
+          {tab === 'bookings' && (owner || scoped) && <AdminBookings admin={user} />}
           {tab === 'broker' && owner && <BrokerAdmin admin={user} />}
           {tab === 'audit' && owner && <AuditLog admin={user} />}
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
@@ -1407,8 +1407,10 @@ const BK_TAGS = {
 };
 
 function AdminBookings({ admin }) {
+  const isOwner = !admin.admin_scope;
   const [rows, setRows] = useState(null);
   const [zoomOn, setZoomOn] = useState(false);
+  const [hoursCfg, setHoursCfg] = useState(null);
   const [filter, setFilter] = useState('pending');
   const [acting, setActing] = useState(null);   // { booking, decision }
   const [fb, setFb] = useState(null);           // booking being given feedback
@@ -1416,7 +1418,7 @@ function AdminBookings({ admin }) {
 
   const load = () =>
     callBookings('admin_booking_list', { admin_id: admin.id })
-      .then((d) => { setRows(d.bookings); setZoomOn(!!d.zoom_configured); })
+      .then((d) => { setRows(d.bookings); setZoomOn(!!d.zoom_configured); setHoursCfg(d.hours || null); })
       .catch((e) => { setErr(e.message); setRows([]); });
 
   useEffect(() => { load(); }, []);
@@ -1444,13 +1446,21 @@ function AdminBookings({ admin }) {
       <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 6 }}>
         All times shown in South African time (SAST), whatever timezone you're in.
       </p>
-      <p style={{ color: 'var(--ink-faint)', fontSize: 12, marginBottom: 14 }}>
+      {!isOwner && (
+        <p style={{ color: 'var(--ink-faint)', fontSize: 12, marginBottom: 10 }}>
+          You're seeing sessions for advanced students. You can add feedback and resources;
+          Taaha approves and declines the bookings themselves.
+        </p>
+      )}
+      {isOwner && <p style={{ color: 'var(--ink-faint)', fontSize: 12, marginBottom: 14 }}>
         {zoomOn
           ? 'Zoom is connected — approving a request creates the meeting and sends the student the link automatically.'
           : 'Zoom is not connected yet, so paste a meeting link by hand when you approve.'}
-      </p>
+      </p>}
 
-      <AvailabilityCard admin={admin} />
+      <BookingCalendar rows={rows} hours={hoursCfg} />
+
+      {isOwner && <AvailabilityCard admin={admin} />}
 
       <div className="admin-tabs">
         {TABS.map(([id, label]) => (
@@ -1469,7 +1479,7 @@ function AdminBookings({ admin }) {
         </div>
       ) : (
         list.map((b) => (
-          <BookingRow key={b.id} b={b} zoomOn={zoomOn}
+          <BookingRow key={b.id} b={b} zoomOn={zoomOn} canDecide={isOwner}
             onApprove={() => { setErr(''); setActing({ booking: b, decision: 'approved' }); }}
             onDecline={() => { setErr(''); setActing({ booking: b, decision: 'declined' }); }}
             onFeedback={() => { setErr(''); setFb(b); }} />
@@ -1488,7 +1498,7 @@ function AdminBookings({ admin }) {
   );
 }
 
-function BookingRow({ b, zoomOn, onApprove, onDecline, onFeedback }) {
+function BookingRow({ b, zoomOn, canDecide, onApprove, onDecline, onFeedback }) {
   const [cls, label] = BK_TAGS[b.status] || ['s-pending', b.status];
   const st = b.student || {};
   const past = Number(b.slot_at) <= Date.now();
@@ -1540,7 +1550,7 @@ function BookingRow({ b, zoomOn, onApprove, onDecline, onFeedback }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-        {b.status === 'pending' && (
+        {b.status === 'pending' && canDecide && (
           <>
             <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={onApprove}>
               {zoomOn ? 'Approve & create Zoom' : 'Approve'}
@@ -1866,6 +1876,141 @@ function AvailabilityCard({ admin }) {
           <button className="btn" style={{ width: 'auto', padding: '10px 20px', marginTop: 8 }} onClick={save} disabled={busy}>
             {busy ? 'Saving…' : 'Save availability'}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- month calendar for 1v1 bookings ---------- */
+const SAST_MS = 2 * 3600000;
+const dayKey = (ms) => new Date(Number(ms) + SAST_MS).toISOString().slice(0, 10);
+const hhmm = (ms) => new Date(Number(ms)).toLocaleTimeString('en-ZA', {
+  timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false,
+});
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function BookingCalendar({ rows, hours }) {
+  const todayKey = dayKey(Date.now());
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const [sel, setSel] = useState(todayKey);
+  const [open, setOpen] = useState(true);
+
+  // Only live bookings belong on a calendar; declined and cancelled are noise.
+  const live = (rows || []).filter((b) => ['pending', 'approved'].includes(b.status));
+  const byDay = {};
+  for (const b of live) (byDay[dayKey(b.slot_at)] ||= []).push(b);
+  for (const k of Object.keys(byDay)) byDay[k].sort((a, b) => a.slot_at - b.slot_at);
+
+  // next 7 days summary
+  const wk = live.filter((b) => {
+    const d = Number(b.slot_at) - Date.now();
+    return d >= 0 && d <= 7 * 86400000;
+  });
+  const wkPending = wk.filter((b) => b.status === 'pending').length;
+  const wkOk = wk.length - wkPending;
+
+  const first = new Date(Date.UTC(cursor.y, cursor.m, 1));
+  const startPad = (first.getUTCDay() + 6) % 7;             // Monday-first
+  const daysInMonth = new Date(Date.UTC(cursor.y, cursor.m + 1, 0)).getUTCDate();
+  const openDays = hours?.days || [1, 2, 3, 4, 5];
+  const overrides = hours?.overrides || {};
+
+  const cells = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    const k = `${cursor.y}-${String(cursor.m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dow = new Date(Date.UTC(cursor.y, cursor.m, d)).getUTCDay();
+    const hasOv = Object.prototype.hasOwnProperty.call(overrides, k);
+    const isOpen = hasOv ? (overrides[k] || []).length > 0 : openDays.includes(dow);
+    cells.push({ k, d, isOpen });
+  }
+
+  const shift = (n) => {
+    const m = cursor.m + n;
+    setCursor({ y: cursor.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 });
+  };
+
+  const selList = byDay[sel] || [];
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <b style={{ fontSize: 14 }}>Your schedule</b>
+          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3 }}>
+            Next 7 days: {wkOk} confirmed{wkPending > 0 && `, ${wkPending} awaiting you`}
+            {wk.length === 0 && 'nothing booked'}
+          </div>
+        </div>
+        <button className="mini-btn" onClick={() => setOpen(!open)}>{open ? 'Hide' : 'Show'}</button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 16 }}>
+          <div className="cal-head">
+            <button className="mini-btn" onClick={() => shift(-1)}>←</button>
+            <h4 className="cal-title">{MONTHS[cursor.m]} {cursor.y}</h4>
+            <button className="mini-btn" onClick={() => shift(1)}>→</button>
+            <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={() => {
+              const d = new Date();
+              setCursor({ y: d.getFullYear(), m: d.getMonth() });
+              setSel(todayKey);
+            }}>Today</button>
+          </div>
+
+          <div className="cal-grid">
+            {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => <div key={d} className="cal-dow">{d}</div>)}
+            {cells.map((c, i) => c === null
+              ? <div key={`p${i}`} className="cal-cell out" />
+              : (
+                <button key={c.k} type="button"
+                  className={`cal-cell ${c.isOpen ? 'open' : ''} ${c.k === todayKey ? 'today' : ''} ${c.k === sel ? 'sel' : ''}`}
+                  onClick={() => setSel(c.k)}>
+                  <span className="cal-num">{c.d}</span>
+                  {(byDay[c.k] || []).slice(0, 2).map((b) => (
+                    <span key={b.id} className={`cal-ev ${b.status === 'approved' ? 'ok' : 'pend'}`}>
+                      {hhmm(b.slot_at)}
+                    </span>
+                  ))}
+                  {(byDay[c.k] || []).length > 2 && (
+                    <span className="cal-more">+{byDay[c.k].length - 2} more</span>
+                  )}
+                </button>
+              ))}
+          </div>
+
+          <div className="cal-key">
+            <span><i style={{ background: 'var(--gold)' }} />Confirmed</span>
+            <span><i style={{ border: '1px dashed var(--gold-soft)' }} />Awaiting you</span>
+            <span><i style={{ background: 'var(--panel-2)', border: '1px solid var(--line)' }} />You take sessions</span>
+          </div>
+
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <b style={{ fontSize: 13 }}>
+              {new Date(sel + 'T12:00:00+02:00').toLocaleDateString('en-ZA', {
+                weekday: 'long', day: 'numeric', month: 'long',
+              })}
+            </b>
+            {selList.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 6 }}>Nothing booked this day.</p>
+            ) : (
+              selList.map((b) => (
+                <div key={b.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
+                  <b style={{ fontVariantNumeric: 'tabular-nums', fontSize: 13.5, minWidth: 46 }}>{hhmm(b.slot_at)}</b>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5 }}>{b.student?.name || 'Unknown student'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.duration_min} min · {b.topic}
+                    </div>
+                  </div>
+                  <span className={`status-tag ${b.status === 'approved' ? 's-approved' : 's-pending'}`}>
+                    {b.status === 'approved' ? 'Confirmed' : 'Awaiting you'}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
