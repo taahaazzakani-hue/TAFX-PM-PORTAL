@@ -217,17 +217,30 @@ function BookingCard({ b, onCancel }) {
 }
 
 function RequestModal({ user, onClose, onDone }) {
-  const earliest = Date.now() + 12 * 3600000;
-  const [when, setWhen] = useState('');
+  const todayStr = toSastInput(Date.now()).slice(0, 10);
+  const [date, setDate] = useState('');
   const [dur, setDur] = useState(60);
+  const [slotMs, setSlotMs] = useState(null);
+  const [slotInfo, setSlotInfo] = useState(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [topic, setTopic] = useState('');
   const [note, setNote] = useState('');
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  const slotMs = fromSastInput(when);
-  const valid = slotMs && slotMs >= earliest && topic.trim().length > 0;
+  // Reload open slots whenever the date or session length changes — a 90 minute
+  // session simply has fewer starts that fit inside a window.
+  useEffect(() => {
+    if (!date) { setSlotInfo(null); return; }
+    setLoadingSlots(true); setSlotMs(null);
+    callBookings('booking_slots', { user_id: user.id, date, duration_min: dur })
+      .then(setSlotInfo)
+      .catch((e) => { setErr(e.message); setSlotInfo(null); })
+      .finally(() => setLoadingSlots(false));
+  }, [date, dur]);
+
+  const valid = slotMs && topic.trim().length > 0;
 
   async function submit() {
     setBusy(true); setErr('');
@@ -237,22 +250,26 @@ function RequestModal({ user, onClose, onDone }) {
         topic: topic.trim(), student_note: note.trim(), student_files: files,
       });
       onDone();
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setErr(e.message);
+      // Someone else may have taken it while this modal was open.
+      if (date) callBookings('booking_slots', { user_id: user.id, date, duration_min: dur }).then(setSlotInfo).catch(() => {});
+      setSlotMs(null);
+    } finally { setBusy(false); }
   }
+
+  const hours = slotInfo?.hours;
+  const maxDate = hours
+    ? toSastInput(Date.now() + (hours.max_days_ahead || 60) * 86400000).slice(0, 10)
+    : undefined;
 
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="serif">Request a 1v1 session</h3>
-
-        <div className="field">
-          <label>Date &amp; time (SAST)</label>
-          <input type="datetime-local" value={when} min={toSastInput(earliest)} onChange={(e) => setWhen(e.target.value)} />
-          {slotMs && slotMs < earliest && (
-            <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>Please pick a time at least 12 hours from now.</div>
-          )}
-        </div>
+        <h3 className="serif">Book a 1v1 session</h3>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 14 }}>
+          Sessions run 08:00–12:00 and 16:00–19:00, South African time.
+        </p>
 
         <div className="field">
           <label>How long?</label>
@@ -260,6 +277,40 @@ function RequestModal({ user, onClose, onDone }) {
             {DURATIONS.map((d) => <option key={d} value={d}>{d} minutes</option>)}
           </select>
         </div>
+
+        <div className="field">
+          <label>Pick a day</label>
+          <input type="date" value={date} min={todayStr} max={maxDate} onChange={(e) => setDate(e.target.value)} />
+        </div>
+
+        {date && (
+          <div className="field">
+            <label>Available times (SAST)</label>
+            {loadingSlots ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Checking availability…</div>
+            ) : slotInfo?.closed ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>
+                No sessions run on that day. Try another date.
+              </div>
+            ) : slotInfo?.all_taken ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>
+                Every slot that day is taken or too soon to book. Try another date.
+              </div>
+            ) : (
+              <div className="slot-grid">
+                {(slotInfo?.slots || []).map((ms) => (
+                  <button key={ms} type="button"
+                    className={`slot ${slotMs === ms ? 'sel' : ''}`}
+                    onClick={() => setSlotMs(ms)}>
+                    {new Date(ms).toLocaleTimeString('en-ZA', {
+                      timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false,
+                    })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="field">
           <label>What do you want to cover?</label>
