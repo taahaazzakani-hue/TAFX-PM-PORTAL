@@ -1695,7 +1695,7 @@ function FeedbackModal({ admin, booking, onClose, onDone }) {
 const DOW = [['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 const DEFAULT_HOURS = {
   windows: [{ start: '08:00', end: '12:00' }, { start: '16:00', end: '19:00' }],
-  days: [1, 2, 3, 4, 5], granularity_min: 30, min_notice_hours: 12, max_days_ahead: 60,
+  days: [1, 2, 3, 4, 5], granularity_min: 30, min_notice_hours: 1, max_days_ahead: 60,
 };
 
 function AvailabilityCard({ admin }) {
@@ -1791,7 +1791,7 @@ function AvailabilityCard({ admin }) {
             <div className="field" style={{ flex: 1, minWidth: 130 }}>
               <label>Minimum notice</label>
               <select value={h.min_notice_hours} onChange={(e) => set({ min_notice_hours: Number(e.target.value) })}>
-                {[2, 6, 12, 24, 48].map((n) => <option key={n} value={n}>{n} hours</option>)}
+                {[1, 2, 3, 6, 12, 24, 48].map((n) => <option key={n} value={n}>{n === 1 ? '1 hour (same-day)' : `${n} hours`}</option>)}
               </select>
             </div>
             <div className="field" style={{ flex: 1, minWidth: 130 }}>
