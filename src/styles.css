@@ -517,3 +517,13 @@ table.grid td { padding: 12px; border-bottom: 1px solid var(--line); vertical-al
   color: var(--ink-soft);
 }
 .brk-hero.dark .brk-caption { color: rgba(255,255,255,.62); border-left-color: #8ab6ff; }
+
+/* 1v1 slot picker */
+.slot-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.slot {
+  padding: 9px 15px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 13px;
+  font-variant-numeric: tabular-nums; transition: background .15s, border-color .15s, color .15s;
+}
+.slot:hover { border-color: var(--gold); }
+.slot.sel { background: var(--gold); border-color: var(--gold); color: #fff; }
