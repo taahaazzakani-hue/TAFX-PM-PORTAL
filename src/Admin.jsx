@@ -1958,7 +1958,10 @@ function BookingCalendar({ rows, hours }) {
       <div className="gcal-bar">
         <button className="gcal-nav" onClick={() => step(-1)}>‹</button>
         <button className="gcal-nav" onClick={() => step(1)}>›</button>
-        <h4 className="gcal-title">{title}</h4>
+        <div style={{ minWidth: 168 }}>
+          <div className="gcal-sub">Your schedule</div>
+          <h4 className="gcal-title">{title}</h4>
+        </div>
         <button className="mini-btn" onClick={() => { setAnchor(todayKey); setSel(null); }}>Today</button>
         <div className="gcal-seg" style={{ marginLeft: 'auto' }}>
           <button className={view === 'week' ? 'on' : ''} onClick={() => setView('week')}>Week</button>
@@ -1972,7 +1975,7 @@ function BookingCalendar({ rows, hours }) {
             <div className="gcal-head">
               <div className="gcal-dh" />
               {weekKeys.map((k, i) => (
-                <div key={k} className={`gcal-dh ${k === todayKey ? 'today' : ''}`}>
+                <div key={k} className={`gcal-dh ${k === todayKey ? 'today' : ''} ${i >= 5 ? 'wknd' : ''}`}>
                   <div className="dow">{DOW_LABELS[i]}</div>
                   <div className="num">{keyNoon(k).getUTCDate()}</div>
                 </div>
@@ -1988,8 +1991,8 @@ function BookingCalendar({ rows, hours }) {
                 ))}
               </div>
 
-              {weekKeys.map((k) => (
-                <div key={k} className="gcal-col">
+              {weekKeys.map((k, ci) => (
+                <div key={k} className={`gcal-col ${ci >= 5 ? 'wknd' : ''} ${k === todayKey ? 'today' : ''}`}>
                   {hoursList.map((h) => <div key={h} className="gcal-line" />)}
 
                   {winsFor(k).map((w, i) => (
@@ -2022,9 +2025,9 @@ function BookingCalendar({ rows, hours }) {
 
       <div className="gcal-foot">
         <div className="gcal-key">
-          <span><i style={{ background: 'var(--gold)' }} />Confirmed</span>
-          <span><i style={{ border: '1px dashed var(--gold)' }} />Awaiting you</span>
-          <span><i style={{ background: 'rgba(31,95,191,.12)' }} />Your available hours</span>
+          <span><i style={{ background: 'rgba(31,95,191,.13)', borderLeft: '3px solid var(--gold)' }} />Confirmed</span>
+          <span><i style={{ background: 'var(--panel)', boxShadow: 'inset 0 0 0 1px var(--line)', borderLeft: '3px dotted var(--gold-soft)' }} />Awaiting you</span>
+          <span><i style={{ background: 'rgba(31,95,191,.055)' }} />Your available hours</span>
         </div>
         <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
           Next 7 days: {wk.length - wkPending} confirmed{wkPending > 0 && `, ${wkPending} awaiting you`}
@@ -2032,7 +2035,7 @@ function BookingCalendar({ rows, hours }) {
         </div>
 
         {sel && (
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+          <div className="gcal-detail">
             <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
               <b style={{ fontVariantNumeric: 'tabular-nums' }}>{hhmm(sel.slot_at)}</b>
               <span style={{ fontSize: 13 }}>{sel.student?.name || 'Unknown student'}</span>
