@@ -1450,6 +1450,8 @@ function AdminBookings({ admin }) {
           : 'Zoom is not connected yet, so paste a meeting link by hand when you approve.'}
       </p>
 
+      <AvailabilityCard admin={admin} />
+
       <div className="admin-tabs">
         {TABS.map(([id, label]) => (
           <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>
@@ -1686,5 +1688,127 @@ function FeedbackModal({ admin, booking, onClose, onDone }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+/* ---------- 1v1 availability windows ---------- */
+const DOW = [['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
+const DEFAULT_HOURS = {
+  windows: [{ start: '08:00', end: '12:00' }, { start: '16:00', end: '19:00' }],
+  days: [1, 2, 3, 4, 5], granularity_min: 30, min_notice_hours: 12, max_days_ahead: 60,
+};
+
+function AvailabilityCard({ admin }) {
+  const [open, setOpen] = useState(false);
+  const [h, setH] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    callSettings('settings_get', { key: 'booking_hours' })
+      .then((d) => setH({ ...DEFAULT_HOURS, ...(d.value || {}) }))
+      .catch(() => setH(DEFAULT_HOURS));
+  }, []);
+
+  if (!h) return null;
+
+  const summary = (h.windows || []).map((w) => `${w.start}–${w.end}`).join('  ·  ');
+  const dayNames = DOW.filter(([n]) => (h.days || []).includes(Number(n))).map(([, l]) => l).join(', ');
+  const set = (patch) => { setH({ ...h, ...patch }); setMsg(''); };
+  const setWin = (i, patch) => {
+    const w = [...(h.windows || [])]; w[i] = { ...w[i], ...patch }; set({ windows: w });
+  };
+
+  async function save() {
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      await callSettings('admin_settings_set', { admin_id: admin.id, key: 'booking_hours', value: h });
+      setMsg('Saved. Students see the new times immediately.');
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <b style={{ fontSize: 14 }}>Your availability</b>
+          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+            {summary || 'No windows set'} · {dayNames || 'no days'} · SAST
+          </div>
+        </div>
+        <button className="mini-btn" onClick={() => setOpen(!open)}>{open ? 'Close' : 'Edit'}</button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+          <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 12 }}>
+            These are in South African time, and they stay that way wherever you are —
+            so students always see the same hours even after you move.
+          </p>
+
+          {(h.windows || []).map((w, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 10 }}>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <label>Window {i + 1} start</label>
+                <input type="time" value={w.start || ''} onChange={(e) => setWin(i, { start: e.target.value })} />
+              </div>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <label>End</label>
+                <input type="time" value={w.end || ''} onChange={(e) => setWin(i, { end: e.target.value })} />
+              </div>
+              <button className="mini-btn" style={{ marginBottom: 10 }}
+                onClick={() => set({ windows: h.windows.filter((_, j) => j !== i) })}>Remove</button>
+            </div>
+          ))}
+          <button className="mini-btn" onClick={() => set({ windows: [...(h.windows || []), { start: '09:00', end: '12:00' }] })}>
+            + Add a window
+          </button>
+
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>Days you take sessions</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {DOW.map(([n, label]) => {
+                const on = (h.days || []).includes(Number(n));
+                return (
+                  <button key={n} type="button" className={`slot ${on ? 'sel' : ''}`}
+                    onClick={() => set({
+                      days: on ? h.days.filter((d) => d !== Number(n)) : [...(h.days || []), Number(n)],
+                    })}>{label}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div className="field" style={{ flex: 1, minWidth: 130 }}>
+              <label>Slots every</label>
+              <select value={h.granularity_min} onChange={(e) => set({ granularity_min: Number(e.target.value) })}>
+                {[15, 30, 60].map((n) => <option key={n} value={n}>{n} minutes</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ flex: 1, minWidth: 130 }}>
+              <label>Minimum notice</label>
+              <select value={h.min_notice_hours} onChange={(e) => set({ min_notice_hours: Number(e.target.value) })}>
+                {[2, 6, 12, 24, 48].map((n) => <option key={n} value={n}>{n} hours</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ flex: 1, minWidth: 130 }}>
+              <label>Book up to</label>
+              <select value={h.max_days_ahead} onChange={(e) => set({ max_days_ahead: Number(e.target.value) })}>
+                {[14, 30, 60, 90].map((n) => <option key={n} value={n}>{n} days ahead</option>)}
+              </select>
+            </div>
+          </div>
+
+          {err && <div className="notice err">{err}</div>}
+          {msg && <div className="notice ok">{msg}</div>}
+          <button className="btn" style={{ width: 'auto', padding: '10px 20px', marginTop: 8 }} onClick={save} disabled={busy}>
+            {busy ? 'Saving…' : 'Save availability'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
