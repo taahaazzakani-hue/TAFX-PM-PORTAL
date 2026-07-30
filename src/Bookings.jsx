@@ -116,7 +116,7 @@ export default function Bookings({ user, onLeave }) {
 
   if (!data) return <div className="spinner" />;
 
-  if (!data.eligible) return <JoinPrompt user={user} onLeave={onLeave} />;
+  if (!data.eligible) return <IntroFlow user={user} data={data} reload={load} onLeave={onLeave} />;
 
   const nowMs = Date.now();
   const upcoming = data.bookings.filter((b) => ['pending', 'approved'].includes(b.status) && Number(b.slot_at) > nowMs);
@@ -209,10 +209,10 @@ function BookingCard({ b, onCancel }) {
   );
 }
 
-function RequestModal({ user, onClose, onDone }) {
+function RequestModal({ user, onClose, onDone, fixedDur, heading, blurb }) {
   const todayStr = toSastInput(Date.now()).slice(0, 10);
   const [date, setDate] = useState('');
-  const [dur, setDur] = useState(60);
+  const [dur, setDur] = useState(fixedDur || 60);
   const [slotMs, setSlotMs] = useState(null);
   const [slotInfo, setSlotInfo] = useState(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -259,17 +259,23 @@ function RequestModal({ user, onClose, onDone }) {
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="serif">Book a 1v1 session</h3>
+        <h3 className="serif">{heading || 'Book a 1v1 session'}</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 14 }}>
-          Sessions run 08:00–12:00 and 16:00–19:00, South African time.
+          {blurb || 'Sessions run 08:00–12:00 and 16:00–19:00, South African time.'}
         </p>
 
-        <div className="field">
-          <label>How long?</label>
-          <select value={dur} onChange={(e) => setDur(Number(e.target.value))}>
-            {DURATIONS.map((d) => <option key={d} value={d}>{d} minutes</option>)}
-          </select>
-        </div>
+        {fixedDur ? (
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+            <b>{fixedDur} minutes</b> — all times South African (SAST).
+          </p>
+        ) : (
+          <div className="field">
+            <label>How long?</label>
+            <select value={dur} onChange={(e) => setDur(Number(e.target.value))}>
+              {DURATIONS.map((d) => <option key={d} value={d}>{d} minutes</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="field">
           <label>Pick a day</label>
@@ -336,13 +342,83 @@ function RequestModal({ user, onClose, onDone }) {
   );
 }
 
-/* ---------- upsell for students not yet in Private Mentorship ----------
-   The "no" is a real answer, not a dismiss: once someone declines, the portal
-   stops pitching. Answering hands the student back to the dashboard rather
-   than parking them on a dead end; revisiting the page just shows where they
-   stand, with a way out. */
-function JoinPrompt({ user, onLeave }) {
-  const [state, setState] = useState(undefined);   // null | { answer }
+/* ---------- students not yet on Private Mentorship ----------------------
+   They get one intro session, fixed length. The join-PM question is held
+   back until that session has actually happened — asking after someone has
+   sat with you is a fair ask; asking before is a cold pitch. */
+function IntroFlow({ user, data, reload, onLeave }) {
+  const [open, setOpen] = useState(false);
+  const intro = data.intro || {};
+  const sessions = data.bookings || [];
+
+  // Their session has been and gone — now the question is fair to ask.
+  if (intro.done) {
+    return (
+      <div>
+        <h3 className="serif" style={{ margin: '0 0 12px' }}>Your intro session</h3>
+        {sessions.map((b) => <BookingCard key={b.id} b={b} />)}
+        <JoinPrompt user={user} onLeave={onLeave} afterSession />
+      </div>
+    );
+  }
+
+  // Booked, not yet happened.
+  if (intro.used) {
+    return (
+      <div>
+        <div className="notice info">
+          Your intro session is booked. Once you've had it, you'll be able to tell Taaha
+          whether you'd like to join Private Mentorship.
+        </div>
+        {sessions.map((b) => (
+          <BookingCard key={b.id} b={b}
+            onCancel={['pending', 'approved'].includes(b.status) && Number(b.slot_at) > Date.now()
+              ? async () => {
+                  if (!confirm(`Cancel your intro session on ${fmtSast(b.slot_at)}?`)) return;
+                  try { await callBookings('booking_cancel', { user_id: user.id, booking_id: b.id }); reload(); }
+                  catch { /* surfaced on reload */ }
+                }
+              : undefined} />
+        ))}
+      </div>
+    );
+  }
+
+  // Never booked — offer the intro.
+  return (
+    <div>
+      <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
+        <div className="brk-eyebrow">One free session</div>
+        <div className="serif" style={{ fontSize: 25, margin: '10px 0' }}>
+          Sit down with Taaha for {intro.minutes || 30} minutes
+        </div>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 470, margin: '0 auto' }}>
+          Bring a chart, a question, or a trade that went wrong. You'll get {intro.minutes || 30} minutes
+          on it one-on-one, plus written notes afterwards that you keep. Every student outside
+          Private Mentorship gets one of these — no charge, no obligation.
+        </p>
+        <button className="btn" style={{ width: 'auto', padding: '13px 26px', marginTop: 22 }}
+          onClick={() => setOpen(true)}>
+          Book my intro session
+        </button>
+        <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 14 }}>
+          One per student. Nothing is booked until Taaha confirms it.
+        </p>
+      </div>
+
+      {open && (
+        <RequestModal user={user} fixedDur={intro.minutes || 30}
+          heading="Book your intro session"
+          blurb="One free session, one per student. Sessions run inside Taaha's available hours."
+          onClose={() => setOpen(false)}
+          onDone={() => { setOpen(false); reload(); }} />
+      )}
+    </div>
+  );
+}
+
+function JoinPrompt({ user, onLeave, afterSession }) {
+  const [state, setState] = useState(undefined);
   const [busy, setBusy] = useState('');
   const [justAnswered, setJustAnswered] = useState(null);
   const [err, setErr] = useState('');
@@ -353,122 +429,104 @@ function JoinPrompt({ user, onLeave }) {
       .catch(() => setState(null));
   }, []);
 
-  // Only bounce out straight after answering — not every time they open the page.
   useEffect(() => {
     if (!justAnswered || !onLeave) return;
     const t = setTimeout(onLeave, 2200);
     return () => clearTimeout(t);
   }, [justAnswered]);
 
-  if (state === undefined) return <div className="spinner" />;
+  if (state === undefined) return null;
 
   async function answer(a) {
     setBusy(a); setErr('');
     try {
       const d = await callInterest('interest_set', { user_id: user.id, answer: a });
-      setState(d.interest);
-      setJustAnswered(a);
+      setState(d.interest); setJustAnswered(a);
     } catch (e) { setErr(e.message); }
     finally { setBusy(''); }
   }
 
   const Home = () => onLeave ? (
-    <button className="btn" style={{ width: 'auto', padding: '11px 22px', marginTop: 18 }} onClick={onLeave}>
+    <button className="btn ghost" style={{ width: 'auto', padding: '11px 22px' }} onClick={onLeave}>
       Back to dashboard
     </button>
   ) : null;
 
-  // just answered — confirm, then hand them back
+  const wrap = (inner) => (
+    <div className="card" style={{ textAlign: 'center', padding: '32px 26px', marginTop: 20 }}>{inner}</div>
+  );
+
   if (justAnswered) {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '38px 26px' }}>
-        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>
-          {justAnswered === 'yes' ? "Noted — Taaha has been told" : 'Thanks for letting us know'}
-        </div>
-        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
-          {justAnswered === 'yes'
-            ? "He'll be in touch about the next intake. Nothing else for you to do."
-            : "We won't ask again. You can change your mind here any time."}
-        </p>
-        <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 16 }}>Taking you back to your dashboard…</p>
-        <Home />
+    return wrap(<>
+      <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>
+        {justAnswered === 'yes' ? 'Noted — Taaha has been told' : 'Thanks for letting us know'}
       </div>
-    );
+      <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
+        {justAnswered === 'yes'
+          ? "He'll be in touch about the next intake. Nothing else for you to do."
+          : "We won't ask again. You can change your mind here any time."}
+      </p>
+      <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: '16px 0 0' }}>Taking you back to your dashboard…</p>
+    </>);
   }
 
   if (state?.answer === 'yes') {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
-        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>You're on the list</div>
-        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
-          You've asked to join Private Mentorship and Taaha has been notified. He'll be in touch about
-          the next intake — nothing else for you to do.
-        </p>
-        {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
-        <div>
-          <Home />
-        </div>
-        <button className="mini-btn" style={{ marginTop: 14 }}
-          onClick={() => answer('no')} disabled={busy === 'no'}>
-          {busy === 'no' ? 'Updating…' : 'Withdraw my interest'}
-        </button>
-      </div>
-    );
+    return wrap(<>
+      <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>You're on the list</div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
+        You've asked to join Private Mentorship and Taaha has been notified. He'll be in touch about the next intake.
+      </p>
+      {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
+      <div style={{ marginTop: 18 }}><Home /></div>
+      <button className="mini-btn" style={{ marginTop: 14 }} onClick={() => answer('no')} disabled={busy === 'no'}>
+        {busy === 'no' ? 'Updating…' : 'Withdraw my interest'}
+      </button>
+    </>);
   }
 
   if (state?.answer === 'no') {
-    return (
-      <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
-        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>
-          1v1 sessions are part of Private Mentorship
-        </div>
-        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
-          You've said mentorship isn't for you right now, so that's the last you'll hear of it from us.
-        </p>
-        {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}>
-          <button className="btn" style={{ width: 'auto', padding: '11px 22px' }}
-            onClick={() => answer('yes')} disabled={busy === 'yes'}>
-            {busy === 'yes' ? 'Sending…' : "I've changed my mind"}
-          </button>
-          {onLeave && (
-            <button className="btn ghost" style={{ width: 'auto', padding: '11px 22px' }} onClick={onLeave}>
-              Back to dashboard
-            </button>
-          )}
-        </div>
+    return wrap(<>
+      <div className="serif" style={{ fontSize: 22, marginBottom: 10 }}>Mentorship isn't for you right now</div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
+        That's the last you'll hear of it from us. The door stays open.
+      </p>
+      {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}>
+        <button className="btn" style={{ width: 'auto', padding: '11px 22px' }}
+          onClick={() => answer('yes')} disabled={busy === 'yes'}>
+          {busy === 'yes' ? 'Sending…' : "I've changed my mind"}
+        </button>
+        <Home />
       </div>
-    );
+    </>);
   }
 
-  // never answered
-  return (
-    <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
-      <div className="serif" style={{ fontSize: 24, marginBottom: 10 }}>
-        1v1 sessions are part of Private Mentorship
-      </div>
-      <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 460, margin: '0 auto' }}>
-        A one-on-one is an hour on your own charts with Taaha — your journal, your entries, your plan —
-        followed by written feedback and marked-up charts you keep. It's only open to Private Mentorship
-        students. Let him know either way and he'll act accordingly.
-      </p>
-
-      {err && <div className="notice err" style={{ marginTop: 16, textAlign: 'left' }}>{err}</div>}
-
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 22 }}>
-        <button className="btn" style={{ width: 'auto', padding: '12px 22px' }}
-          onClick={() => answer('yes')} disabled={!!busy}>
-          {busy === 'yes' ? 'Sending…' : "I'd like to join Private Mentorship"}
-        </button>
-        <button className="btn ghost" style={{ width: 'auto', padding: '12px 22px' }}
-          onClick={() => answer('no')} disabled={!!busy}>
-          {busy === 'no' ? 'Saving…' : 'Not for me right now'}
-        </button>
-      </div>
-
-      <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 16 }}>
-        Either answer is fine, and you can change it whenever you like.
-      </p>
+  return wrap(<>
+    <div className="brk-eyebrow">{afterSession ? 'Now that you\u2019ve had a session' : 'Private Mentorship'}</div>
+    <div className="serif" style={{ fontSize: 24, margin: '10px 0' }}>
+      Would you like to join Private Mentorship?
     </div>
-  );
+    <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 470, margin: '0 auto' }}>
+      {afterSession
+        ? 'Mentorship is that session every time you need one, plus the structured levels, homework and journal reviews. You know what it looks like now — tell Taaha either way and he\u2019ll act accordingly.'
+        : 'Structured levels, homework, journal reviews and one-on-one sessions whenever you need them.'}
+    </p>
+
+    {err && <div className="notice err" style={{ marginTop: 16, textAlign: 'left' }}>{err}</div>}
+
+    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 22 }}>
+      <button className="btn" style={{ width: 'auto', padding: '12px 22px' }}
+        onClick={() => answer('yes')} disabled={!!busy}>
+        {busy === 'yes' ? 'Sending…' : "I'd like to join"}
+      </button>
+      <button className="btn ghost" style={{ width: 'auto', padding: '12px 22px' }}
+        onClick={() => answer('no')} disabled={!!busy}>
+        {busy === 'no' ? 'Saving…' : 'Not for me right now'}
+      </button>
+    </div>
+
+    <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 16 }}>
+      Either answer is fine, and you can change it whenever you like.
+    </p>
+  </>);
 }
