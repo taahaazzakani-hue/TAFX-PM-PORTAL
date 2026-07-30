@@ -1518,11 +1518,18 @@ function BookingRow({ b, zoomOn, canDecide, onApprove, onDecline, onFeedback }) 
         </div>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
           {b.is_intro && <span className="status-tag s-pending">Intro · not on PM</span>}
+          {b.previous_slot_at && <span className="status-tag s-pending">Moved by student</span>}
           <span className={`status-tag ${cls}`}>{label}</span>
         </span>
       </div>
 
       <h3 style={{ marginTop: 12 }}>{fmtSast(b.slot_at)}</h3>
+      {b.previous_slot_at && (
+        <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginTop: 2 }}>
+          Moved from {fmtSast(b.previous_slot_at)}
+          {b.reschedule_count > 1 && ` · ${b.reschedule_count} changes`}
+        </div>
+      )}
       <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
         {b.duration_min} min · requested {new Date(Number(b.created_at)).toLocaleDateString()}
         {(st.levels || []).length > 0 && ` · ${st.levels.map((l) => LV_LABEL[l] || l).join(', ')}`}
