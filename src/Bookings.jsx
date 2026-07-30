@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { callBookings, uploadImage, uploadFile } from './api.js';
+import { callBookings, callInterest, uploadImage, uploadFile } from './api.js';
 import ImageGallery from './ImageGallery.jsx';
 
 /* Times are stored as UTC epoch ms and always shown in SAST, so a student's
@@ -116,14 +116,7 @@ export default function Bookings({ user }) {
 
   if (!data) return <div className="spinner" />;
 
-  if (!data.eligible) {
-    return (
-      <div className="empty">
-        <div className="big serif">1v1 sessions are part of Private Mentorship</div>
-        <div>Book a one-on-one with Taaha to work through your charts, your journal and your plan directly — and get written feedback and resources afterwards. Speak to your mentor about joining Private Mentorship to unlock it.</div>
-      </div>
-    );
-  }
+  if (!data.eligible) return <JoinPrompt user={user} />;
 
   const nowMs = Date.now();
   const upcoming = data.bookings.filter((b) => ['pending', 'approved'].includes(b.status) && Number(b.slot_at) > nowMs);
@@ -339,6 +332,91 @@ function RequestModal({ user, onClose, onDone }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- upsell for students not yet in Private Mentorship ----------
+   The "no" is a real option, not decoration: once someone declines, the
+   portal stops pitching and just leaves a quiet way back. */
+function JoinPrompt({ user }) {
+  const [state, setState] = useState(undefined);   // null | {answer}
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    callInterest('interest_get', { user_id: user.id })
+      .then((d) => setState(d.interest))
+      .catch(() => setState(null));
+  }, []);
+
+  if (state === undefined) return <div className="spinner" />;
+
+  async function answer(a) {
+    setBusy(a); setErr('');
+    try {
+      const d = await callInterest('interest_set', { user_id: user.id, answer: a });
+      setState(d.interest);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(''); }
+  }
+
+  if (state?.answer === 'yes') {
+    return (
+      <div className="empty">
+        <div className="big serif">Taaha knows you're interested</div>
+        <div>
+          You've asked to join Private Mentorship and your mentor has been notified — expect to hear
+          from him about the next intake. Nothing else for you to do.
+        </div>
+        <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px', marginTop: 18 }}
+          onClick={() => answer('no')} disabled={busy === 'no'}>
+          {busy === 'no' ? 'Updating…' : 'Actually, withdraw my interest'}
+        </button>
+      </div>
+    );
+  }
+
+  if (state?.answer === 'no') {
+    return (
+      <div className="empty">
+        <div className="big serif">1v1 sessions are part of Private Mentorship</div>
+        <div>You've said mentorship isn't for you right now, so that's the last you'll hear of it from us.</div>
+        <button className="btn" style={{ width: 'auto', padding: '10px 18px', marginTop: 18 }}
+          onClick={() => answer('yes')} disabled={busy === 'yes'}>
+          {busy === 'yes' ? 'Sending…' : "I've changed my mind — I'd like to join"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
+      <div className="serif" style={{ fontSize: 24, marginBottom: 10 }}>
+        1v1 sessions are part of Private Mentorship
+      </div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 460, margin: '0 auto' }}>
+        A one-on-one is an hour on your own charts with Taaha — your journal, your entries, your plan —
+        followed by written feedback and marked-up charts you keep. It's only open to Private Mentorship
+        students. Let him know either way and he'll act accordingly.
+      </p>
+
+      {err && <div className="notice err" style={{ marginTop: 16, textAlign: 'left' }}>{err}</div>}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 22 }}>
+        <button className="btn" style={{ width: 'auto', padding: '12px 22px' }}
+          onClick={() => answer('yes')} disabled={!!busy}>
+          {busy === 'yes' ? 'Sending…' : "I'd like to join Private Mentorship"}
+        </button>
+        <button className="btn ghost" style={{ width: 'auto', padding: '12px 22px' }}
+          onClick={() => answer('no')} disabled={!!busy}>
+          {busy === 'no' ? 'Saving…' : 'Not for me right now'}
+        </button>
+      </div>
+
+      <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 16 }}>
+        Either answer is fine, and you can change it whenever you like.
+      </p>
     </div>
   );
 }
