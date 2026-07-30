@@ -1918,10 +1918,17 @@ function BookingCalendar({ rows, hours }) {
   for (const k of Object.keys(byDay)) byDay[k].sort((a, b) => a.slot_at - b.slot_at);
 
   // availability for one date — per-date overrides beat the weekly pattern
+  // Mirrors the server: weekly pattern + any cohort-only hours, unless a
+  // per-date override replaces the day outright.
   const winsFor = (k) => {
     const ov = hours?.overrides || {};
     if (Object.prototype.hasOwnProperty.call(ov, k)) return ov[k] || [];
-    return (hours?.days || [1, 2, 3, 4, 5]).includes(dowOf(k)) ? (hours?.windows || []) : [];
+    const dow = dowOf(k);
+    let w = (hours?.days || [1, 2, 3, 4, 5]).includes(dow) ? (hours?.windows || []) : [];
+    for (const c of (hours?.cohorts || [])) {
+      if ((c?.days || []).includes(dow)) w = w.concat(c.windows || []);
+    }
+    return w;
   };
 
   const mondayOf = (k) => shiftKey(k, -((dowOf(k) + 6) % 7));
