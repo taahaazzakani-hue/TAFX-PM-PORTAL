@@ -1516,7 +1516,10 @@ function BookingRow({ b, zoomOn, canDecide, onApprove, onDecline, onFeedback }) 
             {st.email}{st.phone ? ` · ${st.phone}` : ''}
           </div>
         </div>
-        <span className={`status-tag ${cls}`} style={{ marginLeft: 'auto' }}>{label}</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+          {b.is_intro && <span className="status-tag s-pending">Intro · not on PM</span>}
+          <span className={`status-tag ${cls}`}>{label}</span>
+        </span>
       </div>
 
       <h3 style={{ marginTop: 12 }}>{fmtSast(b.slot_at)}</h3>
