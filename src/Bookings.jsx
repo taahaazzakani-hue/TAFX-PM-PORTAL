@@ -351,13 +351,29 @@ function IntroFlow({ user, data, reload, onLeave }) {
   const intro = data.intro || {};
   const sessions = data.bookings || [];
 
-  // Their session has been and gone — now the question is fair to ask.
-  if (intro.done) {
+  const cancelFor = (b) =>
+    ['pending', 'approved'].includes(b.status) && Number(b.slot_at) > Date.now()
+      ? async () => {
+          if (!confirm(`Cancel your intro session on ${fmtSast(b.slot_at)}?`)) return;
+          try { await callBookings('booking_cancel', { user_id: user.id, booking_id: b.id }); reload(); }
+          catch { /* surfaced on reload */ }
+        }
+      : undefined;
+
+  // Two things open the question: the session having happened, or feedback
+  // landing. Feedback can arrive early, and once it has there is something
+  // real to react to, so the ask is fair either way.
+  const sessionPassed = sessions.some((b) => b.status === 'approved' && Number(b.slot_at) <= Date.now());
+  const hasFeedback = sessions.some((b) => !!b.feedback_at);
+  const canAsk = sessionPassed || hasFeedback;
+
+  if (canAsk) {
     return (
       <div>
         <h3 className="serif" style={{ margin: '0 0 12px' }}>Your intro session</h3>
-        {sessions.map((b) => <BookingCard key={b.id} b={b} />)}
-        <JoinPrompt user={user} onLeave={onLeave} afterSession />
+        {sessions.map((b) => <BookingCard key={b.id} b={b} onCancel={cancelFor(b)} />)}
+        <JoinPrompt user={user} onLeave={onLeave}
+          reason={sessionPassed ? 'after-session' : 'after-feedback'} />
       </div>
     );
   }
@@ -370,16 +386,7 @@ function IntroFlow({ user, data, reload, onLeave }) {
           Your intro session is booked. Once you've had it, you'll be able to tell Taaha
           whether you'd like to join Private Mentorship.
         </div>
-        {sessions.map((b) => (
-          <BookingCard key={b.id} b={b}
-            onCancel={['pending', 'approved'].includes(b.status) && Number(b.slot_at) > Date.now()
-              ? async () => {
-                  if (!confirm(`Cancel your intro session on ${fmtSast(b.slot_at)}?`)) return;
-                  try { await callBookings('booking_cancel', { user_id: user.id, booking_id: b.id }); reload(); }
-                  catch { /* surfaced on reload */ }
-                }
-              : undefined} />
-        ))}
+        {sessions.map((b) => <BookingCard key={b.id} b={b} onCancel={cancelFor(b)} />)}
       </div>
     );
   }
@@ -417,7 +424,7 @@ function IntroFlow({ user, data, reload, onLeave }) {
   );
 }
 
-function JoinPrompt({ user, onLeave, afterSession }) {
+function JoinPrompt({ user, onLeave, reason }) {
   const [state, setState] = useState(undefined);
   const [busy, setBusy] = useState('');
   const [justAnswered, setJustAnswered] = useState(null);
@@ -502,13 +509,19 @@ function JoinPrompt({ user, onLeave, afterSession }) {
   }
 
   return wrap(<>
-    <div className="brk-eyebrow">{afterSession ? 'Now that you\u2019ve had a session' : 'Private Mentorship'}</div>
+    <div className="brk-eyebrow">
+      {reason === 'after-session' ? 'Now that you\u2019ve had a session'
+        : reason === 'after-feedback' ? 'Your notes from Taaha are in'
+        : 'Private Mentorship'}
+    </div>
     <div className="serif" style={{ fontSize: 24, margin: '10px 0' }}>
       Would you like to join Private Mentorship?
     </div>
     <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 470, margin: '0 auto' }}>
-      {afterSession
+      {reason === 'after-session'
         ? 'Mentorship is that session every time you need one, plus the structured levels, homework and journal reviews. You know what it looks like now — tell Taaha either way and he\u2019ll act accordingly.'
+        : reason === 'after-feedback'
+        ? 'That is the kind of review you get on your charts in Private Mentorship — every session, plus the structured levels, homework and journal work. Tell Taaha either way and he\u2019ll act accordingly.'
         : 'Structured levels, homework, journal reviews and one-on-one sessions whenever you need them.'}
     </p>
 
