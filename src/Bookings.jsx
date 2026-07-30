@@ -102,7 +102,7 @@ export function FileView({ files, title }) {
 
 /* ---------- student view ---------- */
 
-export default function Bookings({ user }) {
+export default function Bookings({ user, onLeave }) {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState('');
@@ -116,7 +116,7 @@ export default function Bookings({ user }) {
 
   if (!data) return <div className="spinner" />;
 
-  if (!data.eligible) return <JoinPrompt user={user} />;
+  if (!data.eligible) return <JoinPrompt user={user} onLeave={onLeave} />;
 
   const nowMs = Date.now();
   const upcoming = data.bookings.filter((b) => ['pending', 'approved'].includes(b.status) && Number(b.slot_at) > nowMs);
@@ -337,11 +337,14 @@ function RequestModal({ user, onClose, onDone }) {
 }
 
 /* ---------- upsell for students not yet in Private Mentorship ----------
-   The "no" is a real option, not decoration: once someone declines, the
-   portal stops pitching and just leaves a quiet way back. */
-function JoinPrompt({ user }) {
-  const [state, setState] = useState(undefined);   // null | {answer}
+   The "no" is a real answer, not a dismiss: once someone declines, the portal
+   stops pitching. Answering hands the student back to the dashboard rather
+   than parking them on a dead end; revisiting the page just shows where they
+   stand, with a way out. */
+function JoinPrompt({ user, onLeave }) {
+  const [state, setState] = useState(undefined);   // null | { answer }
   const [busy, setBusy] = useState('');
+  const [justAnswered, setJustAnswered] = useState(null);
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -350,6 +353,13 @@ function JoinPrompt({ user }) {
       .catch(() => setState(null));
   }, []);
 
+  // Only bounce out straight after answering — not every time they open the page.
+  useEffect(() => {
+    if (!justAnswered || !onLeave) return;
+    const t = setTimeout(onLeave, 2200);
+    return () => clearTimeout(t);
+  }, [justAnswered]);
+
   if (state === undefined) return <div className="spinner" />;
 
   async function answer(a) {
@@ -357,21 +367,50 @@ function JoinPrompt({ user }) {
     try {
       const d = await callInterest('interest_set', { user_id: user.id, answer: a });
       setState(d.interest);
+      setJustAnswered(a);
     } catch (e) { setErr(e.message); }
     finally { setBusy(''); }
   }
 
+  const Home = () => onLeave ? (
+    <button className="btn" style={{ width: 'auto', padding: '11px 22px', marginTop: 18 }} onClick={onLeave}>
+      Back to dashboard
+    </button>
+  ) : null;
+
+  // just answered — confirm, then hand them back
+  if (justAnswered) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '38px 26px' }}>
+        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>
+          {justAnswered === 'yes' ? "Noted — Taaha has been told" : 'Thanks for letting us know'}
+        </div>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
+          {justAnswered === 'yes'
+            ? "He'll be in touch about the next intake. Nothing else for you to do."
+            : "We won't ask again. You can change your mind here any time."}
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 16 }}>Taking you back to your dashboard…</p>
+        <Home />
+      </div>
+    );
+  }
+
   if (state?.answer === 'yes') {
     return (
-      <div className="empty">
-        <div className="big serif">Taaha knows you're interested</div>
+      <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
+        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>You're on the list</div>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
+          You've asked to join Private Mentorship and Taaha has been notified. He'll be in touch about
+          the next intake — nothing else for you to do.
+        </p>
+        {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
         <div>
-          You've asked to join Private Mentorship and your mentor has been notified — expect to hear
-          from him about the next intake. Nothing else for you to do.
+          <Home />
         </div>
-        <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px', marginTop: 18 }}
+        <button className="mini-btn" style={{ marginTop: 14 }}
           onClick={() => answer('no')} disabled={busy === 'no'}>
-          {busy === 'no' ? 'Updating…' : 'Actually, withdraw my interest'}
+          {busy === 'no' ? 'Updating…' : 'Withdraw my interest'}
         </button>
       </div>
     );
@@ -379,17 +418,30 @@ function JoinPrompt({ user }) {
 
   if (state?.answer === 'no') {
     return (
-      <div className="empty">
-        <div className="big serif">1v1 sessions are part of Private Mentorship</div>
-        <div>You've said mentorship isn't for you right now, so that's the last you'll hear of it from us.</div>
-        <button className="btn" style={{ width: 'auto', padding: '10px 18px', marginTop: 18 }}
-          onClick={() => answer('yes')} disabled={busy === 'yes'}>
-          {busy === 'yes' ? 'Sending…' : "I've changed my mind — I'd like to join"}
-        </button>
+      <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
+        <div className="serif" style={{ fontSize: 23, marginBottom: 10 }}>
+          1v1 sessions are part of Private Mentorship
+        </div>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.7, maxWidth: 430, margin: '0 auto' }}>
+          You've said mentorship isn't for you right now, so that's the last you'll hear of it from us.
+        </p>
+        {err && <div className="notice err" style={{ marginTop: 14, textAlign: 'left' }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}>
+          <button className="btn" style={{ width: 'auto', padding: '11px 22px' }}
+            onClick={() => answer('yes')} disabled={busy === 'yes'}>
+            {busy === 'yes' ? 'Sending…' : "I've changed my mind"}
+          </button>
+          {onLeave && (
+            <button className="btn ghost" style={{ width: 'auto', padding: '11px 22px' }} onClick={onLeave}>
+              Back to dashboard
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
+  // never answered
   return (
     <div className="card" style={{ textAlign: 'center', padding: '34px 26px' }}>
       <div className="serif" style={{ fontSize: 24, marginBottom: 10 }}>
