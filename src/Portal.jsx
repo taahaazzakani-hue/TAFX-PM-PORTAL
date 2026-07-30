@@ -207,7 +207,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'leaderboard' && hasJournal && <Leaderboard user={user} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
-          {view === 'bookings' && <Bookings user={user} />}
+          {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}
           {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
           {view === 'learn' && (
