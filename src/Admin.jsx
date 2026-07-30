@@ -1890,7 +1890,7 @@ function AvailabilityCard({ admin }) {
 
 /* ---------- 1v1 schedule: week grid + month overview ---------- */
 const SAST_MS = 2 * 3600000;
-const HOUR_H = 44;
+const HOUR_H = 40;
 const dayKey = (ms) => new Date(Number(ms) + SAST_MS).toISOString().slice(0, 10);
 const keyNoon = (k) => new Date(k + 'T12:00:00+02:00');
 const shiftKey = (k, n) => dayKey(keyNoon(k).getTime() + n * 86400000);
@@ -1936,16 +1936,17 @@ function BookingCalendar({ rows, hours }) {
 
   // vertical range: cover every window plus every booking on screen, padded an hour
   let lo = 24 * 60, hi = 0;
-  for (const k of weekKeys) {
-    for (const w of winsFor(k)) { lo = Math.min(lo, toMin(w.start)); hi = Math.max(hi, toMin(w.end)); }
-    for (const b of (byDay[k] || [])) {
-      lo = Math.min(lo, minsOf(b.slot_at));
-      hi = Math.max(hi, minsOf(b.slot_at) + b.duration_min);
-    }
+  for (const w of (hours?.windows || [])) { lo = Math.min(lo, toMin(w.start)); hi = Math.max(hi, toMin(w.end)); }
+  for (const c of (hours?.cohorts || [])) {
+    for (const w of (c.windows || [])) { lo = Math.min(lo, toMin(w.start)); hi = Math.max(hi, toMin(w.end)); }
+  }
+  for (const k of weekKeys) for (const b of (byDay[k] || [])) {
+    lo = Math.min(lo, minsOf(b.slot_at));
+    hi = Math.max(hi, minsOf(b.slot_at) + b.duration_min);
   }
   if (lo > hi) { lo = 8 * 60; hi = 19 * 60; }
-  lo = Math.max(0, Math.floor(lo / 60) * 60 - 60);
-  hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60 + 60);
+  lo = Math.max(0, Math.floor(lo / 60) * 60 - 30);
+  hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60 + 30);
   const hoursList = Array.from({ length: (hi - lo) / 60 }, (_, i) => lo / 60 + i);
   const yOf = (mins) => ((mins - lo) / 60) * HOUR_H;
 
@@ -1994,6 +1995,10 @@ function BookingCalendar({ rows, hours }) {
               ))}
             </div>
 
+            {weekKeys.every((k) => !(byDay[k] || []).length) && (
+              <div className="gcal-empty">Nothing booked this week — shaded bands are your open hours.</div>
+            )}
+
             <div className="gcal-grid">
               {showNow && <div className="gcal-now" style={{ top: yOf(nowMins) }} />}
 
@@ -2004,7 +2009,7 @@ function BookingCalendar({ rows, hours }) {
               </div>
 
               {weekKeys.map((k, ci) => (
-                <div key={k} className={`gcal-col ${ci >= 5 ? 'wknd' : ''} ${k === todayKey ? 'today' : ''}`}>
+                <div key={k} className={`gcal-col ${k === todayKey ? 'today' : ''}`}>
                   {hoursList.map((h) => <div key={h} className="gcal-line" />)}
 
                   {winsFor(k).map((w, i) => (
@@ -2037,9 +2042,9 @@ function BookingCalendar({ rows, hours }) {
 
       <div className="gcal-foot">
         <div className="gcal-key">
-          <span><i style={{ background: 'rgba(31,95,191,.13)', borderLeft: '3px solid var(--gold)' }} />Confirmed</span>
-          <span><i style={{ background: 'var(--panel)', boxShadow: 'inset 0 0 0 1px var(--line)', borderLeft: '3px dotted var(--gold-soft)' }} />Awaiting you</span>
-          <span><i style={{ background: 'rgba(31,95,191,.055)' }} />Your available hours</span>
+          <span><i style={{ background: 'var(--gold)' }} />Confirmed</span>
+          <span><i style={{ background: 'var(--panel)', boxShadow: 'inset 0 0 0 1.5px var(--gold)' }} />Awaiting you</span>
+          <span><i style={{ background: 'rgba(31,95,191,.075)' }} />Your available hours</span>
         </div>
         <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 8 }}>
           Next 7 days: {wk.length - wkPending} confirmed{wkPending > 0 && `, ${wkPending} awaiting you`}
