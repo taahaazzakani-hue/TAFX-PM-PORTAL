@@ -105,6 +105,7 @@ export function FileView({ files, title }) {
 export default function Bookings({ user, onLeave }) {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(null);
   const [err, setErr] = useState('');
 
   const load = () =>
@@ -149,7 +150,11 @@ export default function Bookings({ user, onLeave }) {
       {upcoming.length === 0 ? (
         <p style={{ color: 'var(--ink-faint)', fontSize: 13 }}>Nothing booked yet.</p>
       ) : (
-        upcoming.map((b) => <BookingCard key={b.id} b={b} onCancel={() => cancel(b)} />)
+        upcoming.map((b) => (
+          <BookingCard key={b.id} b={b} onCancel={() => cancel(b)}
+            onMove={() => setMoving(b)}
+            movesLeft={(data.max_reschedules || 3) - (b.reschedule_count || 0)} />
+        ))
       )}
 
       {past.length > 0 && (
@@ -160,11 +165,12 @@ export default function Bookings({ user, onLeave }) {
       )}
 
       {open && <RequestModal user={user} onClose={() => setOpen(false)} onDone={() => { setOpen(false); load(); }} />}
+      {moving && <MoveModal user={user} booking={moving} onClose={() => setMoving(null)} onDone={() => { setMoving(null); load(); }} />}
     </div>
   );
 }
 
-function BookingCard({ b, onCancel }) {
+function BookingCard({ b, onCancel, onMove, movesLeft }) {
   const [cls, label] = STATUS_TAG[b.status] || ['s-pending', b.status];
   const mine = b.student_files || [];
   const theirs = b.mentor_files || [];
@@ -173,10 +179,19 @@ function BookingCard({ b, onCancel }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span className={`status-tag ${cls}`}>{label}</span>
         <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{b.duration_min} min</span>
-        {onCancel && <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={onCancel}>Cancel</button>}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {onMove && <button className="mini-btn" onClick={onMove}>Change time</button>}
+          {onCancel && <button className="mini-btn" onClick={onCancel}>Cancel</button>}
+        </span>
       </div>
 
       <h3 style={{ marginTop: 10 }}>{fmtSast(b.slot_at)}</h3>
+      {b.previous_slot_at && (
+        <div style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 2 }}>
+          Moved from {fmtSast(b.previous_slot_at)}
+          {typeof movesLeft === 'number' && b.status === 'pending' && ` · ${movesLeft} change${movesLeft === 1 ? '' : 's'} left`}
+        </div>
+      )}
       <p style={{ color: 'var(--ink-soft)', fontSize: 14, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.topic}</p>
       {b.student_note && (
         <p style={{ color: 'var(--ink-faint)', fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>{b.student_note}</p>
@@ -348,6 +363,7 @@ function RequestModal({ user, onClose, onDone, fixedDur, heading, blurb }) {
    sat with you is a fair ask; asking before is a cold pitch. */
 function IntroFlow({ user, data, reload, onLeave }) {
   const [open, setOpen] = useState(false);
+  const [moving, setMoving] = useState(null);
   const intro = data.intro || {};
   const sessions = data.bookings || [];
 
@@ -386,7 +402,11 @@ function IntroFlow({ user, data, reload, onLeave }) {
           Your intro session is booked. Once you've had it, you'll be able to tell Taaha
           whether you'd like to join Private Mentorship.
         </div>
-        {sessions.map((b) => <BookingCard key={b.id} b={b} onCancel={cancelFor(b)} />)}
+        {sessions.map((b) => (
+          <BookingCard key={b.id} b={b} onCancel={cancelFor(b)}
+            onMove={cancelFor(b) ? () => setMoving(b) : undefined} />
+        ))}
+        {moving && <MoveModal user={user} booking={moving} onClose={() => setMoving(null)} onDone={() => { setMoving(null); reload(); }} />}
       </div>
     );
   }
@@ -542,4 +562,95 @@ function JoinPrompt({ user, onLeave, reason }) {
       Either answer is fine, and you can change it whenever you like.
     </p>
   </>);
+}
+
+/* Moving an existing session. Same slot picker as booking, but the length is
+   fixed and the session goes back to the mentor for approval. */
+function MoveModal({ user, booking, onClose, onDone }) {
+  const todayStr = toSastInput(Date.now()).slice(0, 10);
+  const [date, setDate] = useState('');
+  const [slotMs, setSlotMs] = useState(null);
+  const [info, setInfo] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!date) { setInfo(null); return; }
+    setLoading(true); setSlotMs(null);
+    callBookings('booking_slots', {
+      user_id: user.id, date, duration_min: booking.duration_min,
+      except_booking_id: booking.id,      // its own slot shouldn't block it
+    }).then(setInfo).catch((e) => setErr(e.message)).finally(() => setLoading(false));
+  }, [date]);
+
+  async function save() {
+    setBusy(true); setErr('');
+    try {
+      await callBookings('booking_reschedule', { user_id: user.id, booking_id: booking.id, slot_at: slotMs });
+      onDone();
+    } catch (e) {
+      setErr(e.message);
+      if (date) callBookings('booking_slots', {
+        user_id: user.id, date, duration_min: booking.duration_min, except_booking_id: booking.id,
+      }).then(setInfo).catch(() => {});
+      setSlotMs(null);
+    } finally { setBusy(false); }
+  }
+
+  const maxDate = info?.hours
+    ? toSastInput(Date.now() + (info.hours.max_days_ahead || 60) * 86400000).slice(0, 10)
+    : undefined;
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="serif">Change your session time</h3>
+        <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>
+          Currently <b>{fmtSast(booking.slot_at)}</b> · {booking.duration_min} min
+        </p>
+        <div className="notice info" style={{ marginBottom: 14 }}>
+          Changing the time sends the session back to Taaha for approval, and any
+          existing meeting link stops working until he confirms the new time.
+        </div>
+
+        <div className="field">
+          <label>New day</label>
+          <input type="date" value={date} min={todayStr} max={maxDate} onChange={(e) => setDate(e.target.value)} />
+        </div>
+
+        {date && (
+          <div className="field">
+            <label>Available times (SAST)</label>
+            {loading ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Checking availability…</div>
+            ) : info?.closed ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>No sessions run on that day.</div>
+            ) : info?.all_taken ? (
+              <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Every slot that day is taken. Try another date.</div>
+            ) : (
+              <div className="slot-grid">
+                {(info?.slots || []).map((ms) => (
+                  <button key={ms} type="button" className={`slot ${slotMs === ms ? 'sel' : ''}`}
+                    onClick={() => setSlotMs(ms)}>
+                    {new Date(ms).toLocaleTimeString('en-ZA', {
+                      timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {err && <div className="notice err">{err}</div>}
+
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={onClose}>Keep current time</button>
+          <button className="btn" onClick={save} disabled={busy || !slotMs}>
+            {busy ? 'Sending…' : 'Request new time'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
