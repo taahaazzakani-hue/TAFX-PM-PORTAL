@@ -121,7 +121,9 @@ export default function Bookings({ user, onLeave }) {
 
   const nowMs = Date.now();
   const upcoming = data.bookings.filter((b) => ['pending', 'approved'].includes(b.status) && Number(b.slot_at) > nowMs);
-  const past = data.bookings.filter((b) => !upcoming.includes(b));
+  // Notes come first. Buried under an empty "Upcoming" list, students never found them.
+  const reviewed = data.bookings.filter((b) => !upcoming.includes(b) && b.feedback_at);
+  const past = data.bookings.filter((b) => !upcoming.includes(b) && !b.feedback_at);
 
   async function cancel(b) {
     if (!confirm(`Cancel your 1v1 on ${fmtSast(b.slot_at)}?`)) return;
@@ -145,6 +147,16 @@ export default function Bookings({ user, onLeave }) {
       </div>
 
       {err && <div className="notice err" style={{ marginTop: 12 }}>{err}</div>}
+
+      {reviewed.length > 0 && (
+        <>
+          <div className="brk-section-head" style={{ margin: '26px 0 12px' }}>
+            <h3>Your session notes</h3>
+            <span className="rule" />
+          </div>
+          {reviewed.map((b) => <BookingCard key={b.id} b={b} />)}
+        </>
+      )}
 
       <h3 className="serif" style={{ margin: '26px 0 12px' }}>Upcoming</h3>
       {upcoming.length === 0 ? (
