@@ -704,6 +704,15 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
             <input type="file" accept="image/*" multiple onChange={addImages} style={{ display: 'none' }} disabled={uploading} />
           </label>
         </div>
+        {/* A greyed-out Save with no reason given is the single most common way
+            students get stuck here. Say what is missing. */}
+        {(!f.pair || f.pct === '' || uploading) && (
+          <div style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 10, textAlign: 'right' }}>
+            {uploading
+              ? 'Waiting for your screenshots to finish uploading…'
+              : `Add ${[!f.pair && 'the pair', f.pct === '' && 'the result %'].filter(Boolean).join(' and ')} to save. Confluences are optional.`}
+          </div>
+        )}
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className="btn" onClick={() => onSave(f)} disabled={!f.pair || f.pct === '' || uploading}>Save entry</button>
