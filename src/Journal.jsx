@@ -809,6 +809,7 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
   if (!sessions) return <div className="spinner" />;
 
   const levelSessions = sessions.filter((s) => (s.level || activeLevel) === activeLevel);
+  const otherSessions = sessions.filter((s) => (s.level || activeLevel) !== activeLevel);
   const entriesOf = (sid) => allEntries.filter((e) => e.session_id === sid);
   const open = openId ? levelSessions.find((s) => s.id === openId) : null;
   const openSession = (id) => { setRange({ from: '', to: '' }); setOpenId(id); };
@@ -981,7 +982,93 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
         </div>
       )}
 
+      {otherSessions.length > 0 && (
+        <div className="notice info" style={{ marginTop: 16 }}>
+          You have {otherSessions.length} more backtest session{otherSessions.length !== 1 ? 's' : ''} saved
+          under {[...new Set(otherSessions.map((s) => LEVEL_LABEL[s.level] || s.level))].join(', ')} —
+          switch level at the top of the page to see {otherSessions.length !== 1 ? 'them' : 'it'}.
+        </div>
+      )}
+
+      <LooseBacktests allEntries={allEntries} activeLevel={activeLevel} onOpenDetail={onOpenDetail} />
+
       {showNew && <SessionForm session={null} busy={busy} onSave={saveSession} onClose={() => setShowNew(false)} />}
+    </div>
+  );
+}
+
+/* Most backtest trades were logged before sessions existed, or outside one.
+   They still deserve date-filtered analytics, so they get their own block. */
+function LooseBacktests({ allEntries, activeLevel, onOpenDetail }) {
+  const [range, setRange] = useState({ from: '', to: '' });
+  const [show, setShow] = useState(false);
+
+  const loose = allEntries.filter((e) => e.trade_type === 'backtest' && !e.session_id && (e.level || activeLevel) === activeLevel);
+  if (loose.length === 0) return null;
+
+  const fromMs = range.from ? Date.parse(range.from + 'T00:00:00+02:00') : null;
+  const toMs = range.to ? Date.parse(range.to + 'T23:59:59+02:00') : null;
+  const es = loose.filter((e) => {
+    const t = Number(e.trade_date);
+    if (fromMs && t < fromMs) return false;
+    if (toMs && t > toMs) return false;
+    return true;
+  });
+  const ranged = !!(range.from || range.to);
+  const stats = computeStats(es);
+
+  return (
+    <div style={{ marginTop: 26 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <h3 className="serif" style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>
+          Backtests outside a session
+        </h3>
+        <span style={{ fontSize: 12.5, color: 'var(--ink-faint)' }}>{loose.length} trade{loose.length !== 1 ? 's' : ''}</span>
+        <button className="mini-btn" style={{ margin: 0, marginLeft: 'auto' }} onClick={() => setShow(!show)}>
+          {show ? 'Hide' : 'Show analytics'}
+        </button>
+      </div>
+
+      {show && (
+        <>
+          <div className="card" style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
+              <label>From</label>
+              <input type="date" value={range.from} onChange={(ev) => setRange({ ...range, from: ev.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
+              <label>To</label>
+              <input type="date" value={range.to} onChange={(ev) => setRange({ ...range, to: ev.target.value })} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 2 }}>
+              {[['7d', 7], ['30d', 30], ['90d', 90]].map(([lbl, d]) => (
+                <button key={lbl} className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({
+                  from: new Date(Date.now() - d * 86400000 + 2 * 3600000).toISOString().slice(0, 10),
+                  to: new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 10),
+                })}>Last {lbl}</button>
+              ))}
+              {ranged && <button className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({ from: '', to: '' })}>Clear</button>}
+            </div>
+            {ranged && (
+              <div style={{ width: '100%', fontSize: 12.5, color: 'var(--gold-soft)' }}>
+                Showing {es.length} of {loose.length} — every stat below covers this range only.
+              </div>
+            )}
+          </div>
+
+          {es.length === 0 ? (
+            <div className="empty" style={{ marginTop: 14 }}>
+              <div className="big serif">No trades in those dates</div>
+              <div>Widen the range or clear the filter.</div>
+            </div>
+          ) : (
+            <div style={{ marginTop: 14 }}>
+              <StatsSummary stats={stats} />
+              {es.length > 1 && <AnalyticsPanel stats={stats} entries={es} onDay={(e) => onOpenDetail(e)} />}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
