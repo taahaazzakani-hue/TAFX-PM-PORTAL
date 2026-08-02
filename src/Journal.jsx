@@ -800,6 +800,7 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
   const [addTrade, setAddTrade] = useState(false);
   const [editTrade, setEditTrade] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [range, setRange] = useState({ from: '', to: '' });   // date filter inside a session
 
   const loadSessions = () => call('sessions_list', { user_id: user.id })
     .then((d) => setSessions(d.sessions || [])).catch(() => setSessions([]));
@@ -810,6 +811,7 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
   const levelSessions = sessions.filter((s) => (s.level || activeLevel) === activeLevel);
   const entriesOf = (sid) => allEntries.filter((e) => e.session_id === sid);
   const open = openId ? levelSessions.find((s) => s.id === openId) : null;
+  const openSession = (id) => { setRange({ from: '', to: '' }); setOpenId(id); };
 
   async function saveSession(sess) {
     setBusy(true);
@@ -835,12 +837,23 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
 
   // ---- Detail view of one session ----
   if (open) {
-    const es = entriesOf(open.id);
+    const allEs = entriesOf(open.id);
+    // Inclusive of both end dates — "to" covers the whole day, not midnight.
+    const fromMs = range.from ? Date.parse(range.from + 'T00:00:00+02:00') : null;
+    const toMs = range.to ? Date.parse(range.to + 'T23:59:59+02:00') : null;
+    const filtered = allEs.filter((e) => {
+      const t = Number(e.trade_date);
+      if (fromMs && t < fromMs) return false;
+      if (toMs && t > toMs) return false;
+      return true;
+    });
+    const ranged = !!(range.from || range.to);
+    const es = filtered;
     const stats = computeStats(es);
     const done = open.status === 'completed';
     return (
       <div>
-        <button className="back-link" onClick={() => setOpenId(null)}>← All sessions</button>
+        <button className="back-link" onClick={() => { setRange({ from: '', to: '' }); setOpenId(null); }}>← All sessions</button>
         <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -848,7 +861,7 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
               <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Completed' : 'Active'}</span>
             </div>
             <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>
-              {open.instrument ? <b>{open.instrument}</b> : 'All instruments'} · {es.length} trade{es.length !== 1 ? 's' : ''} · {fmtRange(es)}
+              {open.instrument ? <b>{open.instrument}</b> : 'All instruments'} · {allEs.length} trade{allEs.length !== 1 ? 's' : ''} · {fmtRange(allEs)}
             </div>
             {open.notes && <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 8, whiteSpace: 'pre-wrap' }}>{open.notes}</div>}
           </div>
@@ -859,14 +872,50 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
           </div>
         </div>
 
+        {allEs.length > 0 && (
+          <div className="card" style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
+              <label>From</label>
+              <input type="date" value={range.from} onChange={(ev) => setRange({ ...range, from: ev.target.value })} />
+            </div>
+            <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
+              <label>To</label>
+              <input type="date" value={range.to} onChange={(ev) => setRange({ ...range, to: ev.target.value })} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 2 }}>
+              {[['7d', 7], ['30d', 30], ['90d', 90]].map(([lbl, d]) => (
+                <button key={lbl} className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({
+                  from: new Date(Date.now() - d * 86400000 + 2 * 3600000).toISOString().slice(0, 10),
+                  to: new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 10),
+                })}>Last {lbl}</button>
+              ))}
+              {ranged && <button className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({ from: '', to: '' })}>Clear</button>}
+            </div>
+            {ranged && (
+              <div style={{ width: '100%', fontSize: 12.5, color: 'var(--gold-soft)' }}>
+                Showing {es.length} of {allEs.length} trade{allEs.length !== 1 ? 's' : ''} — every stat below covers this range only.
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'center', margin: '18px 0 14px' }}>
-          <h3 className="serif" style={{ fontSize: 20, fontWeight: 500 }}>Session analytics</h3>
+          <h3 className="serif" style={{ fontSize: 20, fontWeight: 500 }}>
+            {ranged ? 'Analytics for these dates' : 'Session analytics'}
+          </h3>
           <div style={{ flex: 1 }} />
           <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={() => { setEditTrade(null); setAddTrade(true); }}>+ Log backtest</button>
         </div>
 
         {es.length === 0 ? (
-          <div className="empty"><div className="big serif">No trades in this session yet</div><div>Log your first backtest and this session's stats will build here — over as many days as you need.</div></div>
+          ranged ? (
+            <div className="empty">
+              <div className="big serif">No trades in those dates</div>
+              <div>This session has {allEs.length} trade{allEs.length !== 1 ? 's' : ''} outside the range you picked. Widen the dates or clear the filter.</div>
+            </div>
+          ) : (
+            <div className="empty"><div className="big serif">No trades in this session yet</div><div>Log your first backtest and this session's stats will build here — over as many days as you need.</div></div>
+          )
         ) : (
           <>
             <StatsSummary stats={stats} />
@@ -914,7 +963,7 @@ function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onC
             const done = s.status === 'completed';
             const pos = (st.cumPct || 0) >= 0;
             return (
-              <div key={s.id} className="card" style={{ margin: 0, cursor: 'pointer' }} onClick={() => setOpenId(s.id)}>
+              <div key={s.id} className="card" style={{ margin: 0, cursor: 'pointer' }} onClick={() => openSession(s.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {s.name}</div>
                   <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Done' : 'Active'}</span>
