@@ -41,6 +41,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const [tab, setTab] = useState('journal');
   const [typeFilter, setTypeFilter] = useState('all');
   const [modelFilter, setModelFilter] = useState('all');
+  const [range, setRange] = useState({ from: '', to: '' });   // applies across all three tabs
   const [tagLib, setTagLib] = useState(user.journal_tags || []);
 
   async function createTag(name) {
@@ -70,13 +71,26 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
   const JOURNAL_LEVELS = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'];
   const levelsToShow = readOnly ? JOURNAL_LEVELS : myLevels.filter((l) => JOURNAL_LEVELS.includes(l));
   const activeLevel = levelsToShow.includes(level) ? level : (levelsToShow[0] || 'beginner');
-  const allLevelEntries = data.entries.filter((e) => e.level === activeLevel);
+  const levelEntries = data.entries.filter((e) => e.level === activeLevel);
+  // Date range first, so the trade log, analytics and sessions all agree.
+  // Both ends inclusive: "to" covers the whole of that day in SAST.
+  const fromMs = range.from ? Date.parse(range.from + 'T00:00:00+02:00') : null;
+  const toMs = range.to ? Date.parse(range.to + 'T23:59:59+02:00') : null;
+  const ranged = !!(range.from || range.to);
+  const allLevelEntries = ranged
+    ? levelEntries.filter((e) => {
+        const t = Number(e.trade_date);
+        if (fromMs && t < fromMs) return false;
+        if (toMs && t > toMs) return false;
+        return true;
+      })
+    : levelEntries;
   // Filter by trade type. Entries saved before this feature default to 'live'.
   const byType = typeFilter === 'all' ? allLevelEntries : allLevelEntries.filter((e) => (e.trade_type || 'live') === typeFilter);
   // Then filter by model (All + each model).
   const entries = modelFilter === 'all' ? byType : byType.filter((e) => (e.model || '') === modelFilter);
   // Recompute stats for the filtered set (backend stats cover everything together).
-  const stats = (typeFilter === 'all' && modelFilter === 'all') ? (data.stats[activeLevel] || computeStats(allLevelEntries)) : computeStats(entries);
+  const stats = (!ranged && typeFilter === 'all' && modelFilter === 'all') ? (data.stats[activeLevel] || computeStats(allLevelEntries)) : computeStats(entries);
   const modelCount = (m) => byType.filter((e) => (e.model || '') === m).length;
   const ql = q.trim().toLowerCase();
   const logEntries = ql ? entries.filter((e) => [e.pair, e.notes, e.outcome, e.direction, e.killzone, e.model, ...(e.confluences || []), ...(e.tags || [])].some((v) => (v || '').toString().toLowerCase().includes(ql))) : entries;
@@ -126,6 +140,31 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
         {levelsToShow.map((lv) => (<button key={lv} className={activeLevel === lv ? 'active' : ''} onClick={() => setLevel(lv)}>{LEVEL_LABEL[lv]}</button>))}
       </div>
 
+      <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 14 }}>
+        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 135 }}>
+          <label>From</label>
+          <input type="date" value={range.from} onChange={(ev) => setRange({ ...range, from: ev.target.value })} />
+        </div>
+        <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 135 }}>
+          <label>To</label>
+          <input type="date" value={range.to} onChange={(ev) => setRange({ ...range, to: ev.target.value })} />
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 2 }}>
+          {[['7d', 7], ['30d', 30], ['90d', 90]].map(([lbl, d]) => (
+            <button key={lbl} className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({
+              from: new Date(Date.now() - d * 86400000 + 2 * 3600000).toISOString().slice(0, 10),
+              to: new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 10),
+            })}>Last {lbl}</button>
+          ))}
+          {ranged && <button className="mini-btn" style={{ margin: 0 }} onClick={() => setRange({ from: '', to: '' })}>Clear dates</button>}
+        </div>
+        {ranged && (
+          <div style={{ width: '100%', fontSize: 12.5, color: 'var(--gold-soft)' }}>
+            Showing {allLevelEntries.length} of {levelEntries.length} trade{levelEntries.length !== 1 ? 's' : ''} in this date range — every stat on all three tabs covers these dates only.
+          </div>
+        )}
+      </div>
+
       {/* Journal / Analytics / Sessions sub-tabs */}
       <div style={{ display: 'flex', gap: 8, margin: '4px 0 20px', borderBottom: '1px solid var(--line)' }}>
         {[['journal', '📓 Journal'], ['analytics', '📊 Analytics'], ...(readOnly ? [] : [['sessions', '🎯 Sessions']])].map(([k, lbl]) => (
@@ -155,7 +194,9 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
           {entries.length > 0 && <SearchBox value={q} onChange={setQ} placeholder="Search pair, confluence, note or result…" />}
 
           {entries.length === 0 ? (
-            <div className="empty"><div className="big serif">No trades logged{readOnly ? '' : ' yet'}</div>{!readOnly && <div>Add your first entry to start building your stats.</div>}</div>
+            ranged
+              ? <div className="empty"><div className="big serif">No trades in those dates</div><div>You have {levelEntries.length} trade{levelEntries.length !== 1 ? 's' : ''} at this level outside the range. Widen the dates or clear the filter.</div></div>
+              : <div className="empty"><div className="big serif">No trades logged{readOnly ? '' : ' yet'}</div>{!readOnly && <div>Add your first entry to start building your stats.</div>}</div>
           ) : logEntries.length === 0 ? (
             <div className="empty"><div>No trades match your search.</div></div>
           ) : (
@@ -170,14 +211,16 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
 
       {tab === 'analytics' && (
         entries.length === 0 ? (
-          <div className="empty"><div className="big serif">No data yet</div><div>Log some trades and your analytics will appear here.</div></div>
+          ranged
+            ? <div className="empty"><div className="big serif">No trades in those dates</div><div>You have {levelEntries.length} trade{levelEntries.length !== 1 ? 's' : ''} at this level outside the range.</div></div>
+            : <div className="empty"><div className="big serif">No data yet</div><div>Log some trades and your analytics will appear here.</div></div>
         ) : (
           <AnalyticsPanel stats={stats} entries={entries} onDay={(e) => setDetail(e)} />
         )
       )}
 
       {tab === 'sessions' && !readOnly && (
-        <SessionsPanel user={user} activeLevel={activeLevel} allEntries={data.entries}
+        <SessionsPanel user={user} activeLevel={activeLevel} allEntries={ranged ? allLevelEntries : data.entries} outerRanged={ranged}
           confluences={confluences} tagLib={tagLib} onCreateTag={createTag} onDeleteTag={deleteTag}
           onReload={load} onOpenDetail={(e) => setDetail(e)} />
       )}
@@ -792,7 +835,7 @@ function fmtRange(entries) {
   return ds[0] === ds[ds.length - 1] || f(a) === f(b) ? f(a) : `${f(a)} – ${f(b)}`;
 }
 
-function SessionsPanel({ user, activeLevel, allEntries, confluences, tagLib, onCreateTag, onDeleteTag, onReload, onOpenDetail }) {
+function SessionsPanel({ user, activeLevel, allEntries, outerRanged = false, confluences, tagLib, onCreateTag, onDeleteTag, onReload, onOpenDetail }) {
   const [sessions, setSessions] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [showNew, setShowNew] = useState(false);
