@@ -7,6 +7,7 @@ import Journal from './Journal.jsx';
 import Homework from './Homework.jsx';
 import Bookings from './Bookings.jsx';
 import Broker from './Broker.jsx';
+import { callGates } from './api.js';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
@@ -64,6 +65,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeVideo, setActiveVideo] = useState(null);
   const [watched, setWatched] = useState(new Set(initialUser.watched_videos || []));
+  const [gate, setGate] = useState(null);   // content lock state for the open course
   const [navOpen, setNavOpen] = useState(false);
   const [pmOpen, setPmOpen] = useState(true);
 
@@ -112,6 +114,13 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const hasJournal = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'].some((l) => myLevels.includes(l));
   const hasHomework = ['beginner', 'intermediate', 'advanced', 'advanced2'].some((l) => myLevels.includes(l));
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
+  // Ask the server what is locked whenever the open course changes.
+  useEffect(() => {
+    if (!course?.level) { setGate(null); return; }
+    callGates('gate_state', { user_id: user.id, level: course.level })
+      .then(setGate).catch(() => setGate(null));
+  }, [course?.level]);
+
   const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
   const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
 
@@ -218,7 +227,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
                 resources={(content.resources || []).filter((r) => r.section_id === activeVideo.section_id)}
                 done={watched.has(activeVideo.id)} onBack={() => setActiveVideo(null)} onToggle={() => toggleWatched(activeVideo.id)} />
             ) : (
-              <CourseView course={course} sections={courseSections} videos={courseVideos}
+              <CourseView course={course} sections={courseSections} videos={courseVideos} gate={gate} onGoHomework={() => setView('homework')}
                 resources={(content.resources || []).filter((r) => r.course_id === course?.id)}
                 watched={watched} progress={courseProgress(course?.id)} onOpen={setActiveVideo} />
             )
@@ -335,7 +344,10 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
   );
 }
 
-function CourseView({ course, sections, videos, resources, watched, progress, onOpen }) {
+function CourseView({ course, sections, videos, resources, watched, progress, onOpen, gate, onGoHomework }) {
+  // A section is locked when the level is gated, the student has not been
+  // approved yet, and the section is not on the open list.
+  const locked = (sid) => !!(gate?.gated && !gate.unlocked && !(gate.open_sections || []).includes(sid));
   const [open, setOpen] = useState({});
   const topLevel = (sections || []).filter((s) => !s.parent_id);
   useEffect(() => { if (topLevel.length) setOpen({ [topLevel[0].id]: true }); }, [course?.id]);
@@ -358,6 +370,27 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
       </>
     );
   };
+
+  const LockedNotice = ({ title }) => (
+    <div className="card" style={{ opacity: .96 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0, color: 'var(--ink-faint)' }}>{title}</h3>
+        <span className="status-tag s-pending" style={{ marginLeft: 'auto' }}>Locked</span>
+      </div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, marginTop: 8 }}>
+        {gate?.locked_message || 'Complete the assignment to unlock this section.'}
+      </p>
+      {gate?.submission_status === 'submitted' ? (
+        <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 6 }}>
+          Your assignment is with Taaha for review.
+        </p>
+      ) : (
+        <button className="btn" style={{ width: 'auto', padding: '10px 18px', marginTop: 12 }} onClick={onGoHomework}>
+          Open the assignment
+        </button>
+      )}
+    </div>
+  );
 
   // renders a normal section OR a subfolder (both hold videos directly)
   const VideoSection = ({ s, nested }) => {
@@ -423,7 +456,9 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
       {topLevel.length === 0 && (
         <div className="empty"><div className="big serif">Content coming soon</div><div>Your mentor is preparing this stage.</div></div>
       )}
-      {topLevel.map((s) => s.is_folder ? <FolderSection key={s.id} f={s} /> : <VideoSection key={s.id} s={s} />)}
+      {topLevel.map((s) => locked(s.id)
+        ? <LockedNotice key={s.id} title={s.title} />
+        : s.is_folder ? <FolderSection key={s.id} f={s} /> : <VideoSection key={s.id} s={s} />)}
     </div>
   );
 }
