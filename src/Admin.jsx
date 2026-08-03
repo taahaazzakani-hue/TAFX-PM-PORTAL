@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { call, callBookings, callSettings, callInterest, uploadFile } from './api.js';
+import { call, callBookings, callSettings, callInterest, callGates, uploadFile } from './api.js';
 import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
@@ -66,6 +66,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {!scoped && <T id="billing" icon={<IcCard />} label="Billing" />}
           {(owner || scoped) && <T id="bookings" icon={<IcCalendar />} label="1v1 Bookings" />}
           {owner && <T id="broker" icon={<IcTag />} label="Broker Page" />}
+          {owner && <T id="gate" icon={<IcClipboard />} label="TA Model Gate" />}
           {owner && <T id="audit" icon={<IcClipboard />} label="Activity Log" />}
           <T id="profile" icon={<IcUser />} label="Profile" />
         </div>
@@ -75,7 +76,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
         </div>
       </aside>
       <main className="main">
-        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab === 'bookings' ? '1v1 Bookings' : tab === 'broker' ? 'Broker Page' : tab}</h2></div>
+        <div className="topbar"><h2 style={{ textTransform: 'capitalize' }}>{tab === 'dashboard' ? 'Command Center' : tab === 'bookings' ? '1v1 Bookings' : tab === 'broker' ? 'Broker Page' : tab === 'gate' ? 'TA Model Gate' : tab}</h2></div>
         <div className="content">
           {tab === 'dashboard' && <AdminDashboard admin={user} goTo={setTab} />}
           {tab === 'students' && <Students admin={user} />}
@@ -88,6 +89,7 @@ export default function Admin({ user, onLogout, onUpdated }) {
           {tab === 'billing' && <Billing admin={user} />}
           {tab === 'bookings' && (owner || scoped) && <AdminBookings admin={user} />}
           {tab === 'broker' && owner && <BrokerAdmin admin={user} />}
+          {tab === 'gate' && owner && <GatePanel admin={user} />}
           {tab === 'audit' && owner && <AuditLog admin={user} />}
           {tab === 'profile' && <Profile user={user} onUpdated={onUpdated} />}
         </div>
@@ -2192,6 +2194,90 @@ function InterestCard({ admin }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------- TA Model gate: who has unlocked Intermediate ---------- */
+function GatePanel({ admin }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = () => callGates('admin_gate_list', { admin_id: admin.id, level: 'intermediate' })
+    .then(setD).catch((e) => { setErr(e.message); setD({ students: [] }); });
+  useEffect(() => { load(); }, []);
+  if (!d) return <div className="spinner" />;
+
+  // Reuses the existing homework review action, so approvals stay in one place.
+  async function decide(st, status) {
+    if (!st.submission_id) return;
+    setBusy(st.user_id); setErr('');
+    try {
+      await callGates('admin_gate_decide', {
+        admin_id: admin.id, submission_id: st.submission_id, status,
+        admin_comment: status === 'approved'
+          ? 'Approved — the rest of the Intermediate content is now open.'
+          : 'Sent back — please review the notes and resubmit.',
+      });
+      load();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(''); }
+  }
+
+  const waiting = d.students.filter((s) => s.status === 'submitted');
+  const done = d.students.filter((s) => s.status === 'approved');
+  const rest = d.students.filter((s) => !['submitted', 'approved'].includes(s.status));
+
+  const Row = ({ st }) => (
+    <div className="card">
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 170 }}>
+          <b style={{ fontSize: 14 }}>{st.name}</b>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{st.email}</div>
+        </div>
+        <span className="status-tag" style={{
+          background: st.backtests_logged >= d.required ? 'var(--green-bg, #e6f4ec)' : 'transparent',
+          border: '1px solid var(--line)', color: st.backtests_logged >= d.required ? 'var(--green)' : 'var(--ink-faint)',
+        }}>
+          {st.backtests_logged} / {d.required} TA Model backtests
+        </span>
+        <span className={`status-tag ${st.status === 'approved' ? 's-approved' : st.status === 'submitted' ? 's-pending' : 's-rejected'}`}>
+          {st.status === 'approved' ? 'Unlocked' : st.status === 'submitted' ? 'Awaiting you' : st.status === 'rejected' ? 'Sent back' : 'Not submitted'}
+        </span>
+      </div>
+      {st.text && <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginTop: 10, whiteSpace: 'pre-wrap' }}>{st.text}</p>}
+      {st.link && <div style={{ fontSize: 12.5, marginTop: 6 }}><a href={st.link} target="_blank" rel="noreferrer">{st.link}</a></div>}
+      {st.status === 'submitted' && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <button className="btn" style={{ width: 'auto', padding: '10px 18px' }}
+            onClick={() => decide(st, 'approved')} disabled={busy === st.user_id}>
+            {busy === st.user_id ? 'Saving…' : 'Approve & unlock content'}
+          </button>
+          <button className="btn ghost" style={{ width: 'auto', padding: '10px 18px' }}
+            onClick={() => decide(st, 'rejected')} disabled={busy === st.user_id}>Send back</button>
+        </div>
+      )}
+      {st.status === 'submitted' && st.backtests_logged < d.required && (
+        <div className="notice err" style={{ marginTop: 10 }}>
+          They've submitted but only {st.backtests_logged} TA Model backtests are logged in their journal.
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 14 }}>
+        Intermediate content stays locked except THE TA MODEL until you approve each student's
+        25-backtest assignment. The count is read live from their journal, so you can check the
+        claim before approving.
+      </p>
+      {err && <div className="notice err">{err}</div>}
+
+      {waiting.length > 0 && <><h3 className="serif" style={{ margin: '18px 0 10px' }}>Awaiting you ({waiting.length})</h3>{waiting.map((s) => <Row key={s.user_id} st={s} />)}</>}
+      {rest.length > 0 && <><h3 className="serif" style={{ margin: '22px 0 10px' }}>Not submitted ({rest.length})</h3>{rest.map((s) => <Row key={s.user_id} st={s} />)}</>}
+      {done.length > 0 && <><h3 className="serif" style={{ margin: '22px 0 10px' }}>Unlocked ({done.length})</h3>{done.map((s) => <Row key={s.user_id} st={s} />)}</>}
     </div>
   );
 }
