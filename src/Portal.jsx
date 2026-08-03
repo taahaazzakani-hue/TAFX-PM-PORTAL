@@ -105,6 +105,17 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
     try { await call(isDone ? 'unprogress' : 'progress', { user_id: user.id, video_id: videoId }); } catch {}
   }
 
+  // Must sit above the early return below — hooks cannot be conditional.
+  const gateLevel = (() => {
+    const cs = (content?.courses || []).filter((c) => (user.levels || []).includes(c.level) && c.level !== '1v1');
+    return (cs.find((c) => c.id === activeCourse) || cs[0])?.level || null;
+  })();
+  useEffect(() => {
+    if (!gateLevel) { setGate(null); return; }
+    callGates('gate_state', { user_id: user.id, level: gateLevel })
+      .then(setGate).catch(() => setGate(null));
+  }, [gateLevel]);
+
   if (!content) return <div className="center-load"><div className="spinner" /></div>;
 
   const myLevels = user.levels || [];
@@ -114,12 +125,6 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const hasJournal = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'].some((l) => myLevels.includes(l));
   const hasHomework = ['beginner', 'intermediate', 'advanced', 'advanced2'].some((l) => myLevels.includes(l));
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
-  // Ask the server what is locked whenever the open course changes.
-  useEffect(() => {
-    if (!course?.level) { setGate(null); return; }
-    callGates('gate_state', { user_id: user.id, level: course.level })
-      .then(setGate).catch(() => setGate(null));
-  }, [course?.level]);
 
   const courseSections = (content.sections || []).filter((s) => s.course_id === course?.id);
   const courseVideos = (content.videos || []).filter((v) => v.course_id === course?.id);
