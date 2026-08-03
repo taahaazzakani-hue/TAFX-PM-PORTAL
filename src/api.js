@@ -1,3 +1,4 @@
+
 // ── Backend configuration ───────────────────────────────────────────
 const SUPABASE_URL = 'https://sicegpbjpulqbomkrrtn.supabase.co';
 const ANON_KEY =
@@ -7,6 +8,7 @@ const API = `${SUPABASE_URL}/functions/v1/pm-api`;
 const BOOKINGS_API = `${SUPABASE_URL}/functions/v1/pm-bookings`;
 const SETTINGS_API = `${SUPABASE_URL}/functions/v1/pm-settings`;
 const INTEREST_API = `${SUPABASE_URL}/functions/v1/pm-interest`;
+const GATES_API = `${SUPABASE_URL}/functions/v1/pm-gates`;
 
 // NOTE: Online payment gateways (PayFast/Paystack) were removed. Subscriptions
 // are paid manually by EFT to the mentor; see payinfo.js for the details shown
@@ -30,6 +32,11 @@ export async function callSettings(action, body = {}) {
 // Private Mentorship interest from students not yet enrolled.
 export async function callInterest(action, body = {}) {
   return post(INTEREST_API, action, body);
+}
+
+// Content gating — which sections a student has unlocked.
+export async function callGates(action, body = {}) {
+  return post(GATES_API, action, body);
 }
 
 async function post(url, action, body) {
