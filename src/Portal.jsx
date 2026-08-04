@@ -383,9 +383,15 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
         <span className="status-tag s-pending" style={{ marginLeft: 'auto' }}>Locked</span>
       </div>
       <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, marginTop: 8 }}>
-        {gate?.locked_message || 'Complete the assignment to unlock this section.'}
+        {gate?.not_yet_open
+          ? `The TA Model backtest assignment opens ${gate.starts_label || 'soon'}. Everyone starts from zero — only backtests logged from then count.`
+          : (gate?.locked_message || 'Complete the assignment to unlock this section.')}
       </p>
-      {gate?.submission_status === 'submitted' ? (
+      {gate?.not_yet_open ? (
+        <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 6 }}>
+          Use the time until then to watch THE TA MODEL videos.
+        </p>
+      ) : gate?.submission_status === 'submitted' ? (
         <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 6 }}>
           Your assignment is with Taaha for review.
         </p>
