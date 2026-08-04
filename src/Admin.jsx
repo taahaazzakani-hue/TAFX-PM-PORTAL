@@ -2268,11 +2268,18 @@ function GatePanel({ admin }) {
 
   return (
     <div>
-      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 14 }}>
+      <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 10 }}>
         Intermediate content stays locked except THE TA MODEL until you approve each student's
-        25-backtest assignment. The count is read live from their journal, so you can check the
+        25-backtest assignment. Counts are read live from their journals, so you can check the
         claim before approving.
       </p>
+      {d.starts_label && (
+        <div className={d.not_yet_open ? 'notice info' : 'notice'} style={{ marginBottom: 14 }}>
+          {d.not_yet_open
+            ? `The assignment opens ${d.starts_label}. Everyone is on zero until then — only backtests logged from that moment count.`
+            : `Counting backtests logged from ${d.starts_label} onward. Anything logged earlier does not count.`}
+        </div>
+      )}
       {err && <div className="notice err">{err}</div>}
 
       {waiting.length > 0 && <><h3 className="serif" style={{ margin: '18px 0 10px' }}>Awaiting you ({waiting.length})</h3>{waiting.map((s) => <Row key={s.user_id} st={s} />)}</>}
