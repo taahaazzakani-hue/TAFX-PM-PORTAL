@@ -2242,6 +2242,11 @@ function GatePanel({ admin }) {
         }}>
           {st.backtests_logged} / {d.required} TA Model backtests
         </span>
+        {st.custom_start && (
+          <span className="status-tag s-pending" title={`Starts ${st.starts_label || ''}`}>
+            Own start: {st.starts_label || 'custom'}
+          </span>
+        )}
         <span className={`status-tag ${st.status === 'approved' ? 's-approved' : st.status === 'submitted' ? 's-pending' : 's-rejected'}`}>
           {st.status === 'approved' ? 'Unlocked' : st.status === 'submitted' ? 'Awaiting you' : st.status === 'rejected' ? 'Sent back' : 'Not submitted'}
         </span>
