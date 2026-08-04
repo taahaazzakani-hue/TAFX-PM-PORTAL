@@ -2244,9 +2244,10 @@ function GatePanel({ admin }) {
         </span>
         {st.custom_start && (
           <span className="status-tag s-pending" title={`Starts ${st.starts_label || ''}`}>
-            Own start: {st.starts_label || 'custom'}
+            Own window: {st.starts_label || 'custom'}{st.ends_label ? ` → ${st.ends_label}` : ''}
           </span>
         )}
+        {st.deadline_passed && <span className="status-tag s-rejected">Deadline passed</span>}
         <span className={`status-tag ${st.status === 'approved' ? 's-approved' : st.status === 'submitted' ? 's-pending' : 's-rejected'}`}>
           {st.status === 'approved' ? 'Unlocked' : st.status === 'submitted' ? 'Awaiting you' : st.status === 'rejected' ? 'Sent back' : 'Not submitted'}
         </span>
