@@ -2242,6 +2242,14 @@ function GatePanel({ admin }) {
         }}>
           {st.backtests_logged} / {d.required} TA Model backtests
         </span>
+        {d.milestone_target != null && (
+          <span className="status-tag" style={{
+            border: '1px solid var(--line)',
+            color: st.milestone_met ? 'var(--green)' : 'var(--ink-faint)',
+          }}>
+            weekend {st.milestone_done} / {d.milestone_target}
+          </span>
+        )}
         {st.custom_start && (
           <span className="status-tag s-pending" title={`Starts ${st.starts_label || ''}`}>
             Own window: {st.starts_label || 'custom'}{st.ends_label ? ` → ${st.ends_label}` : ''}
@@ -2276,9 +2284,15 @@ function GatePanel({ admin }) {
     <div>
       <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 10 }}>
         Intermediate content stays locked except THE TA MODEL until you approve each student's
-        25-backtest assignment. Counts are read live from their journals, so you can check the
+        backtest target. Counts are read live from their journals, so you can check the
         claim before approving.
       </p>
+      {d.milestone_label && (
+        <div className="notice info" style={{ marginBottom: 10 }}>
+          <b>This weekend:</b> {d.milestone_label}. Sections unlock at {d.required} in total —
+          the weekend target is pacing, not the unlock.
+        </div>
+      )}
       {d.starts_label && (
         <div className={d.not_yet_open ? 'notice info' : 'notice'} style={{ marginBottom: 14 }}>
           {d.not_yet_open
