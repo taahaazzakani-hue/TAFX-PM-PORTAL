@@ -387,9 +387,14 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
           ? `The TA Model backtest assignment opens ${gate.starts_label || 'soon'}. Everyone starts from zero — only backtests logged from then count.`
           : (gate?.locked_message || 'Complete the assignment to unlock this section.')}
       </p>
-      {gate?.ends_label && !gate?.not_yet_open && !gate?.deadline_passed && (
-        <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 6 }}>
-          Due {gate.ends_label} — {gate.backtests_logged || 0} of {gate.required || 25} logged so far.
+      {!gate?.not_yet_open && gate?.milestone && !gate.milestone.passed && (
+        <p style={{ fontSize: 12.5, color: gate.milestone.met ? 'var(--green)' : 'var(--gold-soft)', marginTop: 6 }}>
+          {gate.milestone.met ? '✓ ' : ''}This weekend: {gate.milestone.done} of {gate.milestone.target} — {gate.milestone.label}
+        </p>
+      )}
+      {!gate?.not_yet_open && (
+        <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginTop: 4 }}>
+          Unlocks at {gate?.required || 40} backtests — {gate?.backtests_logged || 0} logged so far.
         </p>
       )}
       {gate?.not_yet_open ? (
