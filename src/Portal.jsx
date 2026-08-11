@@ -398,15 +398,18 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
                   : w.state === 'open' ? 'var(--gold)' : 'var(--ink-faint)',
                 fontWeight: w.state === 'open' ? 700 : 500,
               }}>
-                {w.state === 'complete' ? '\u2713 ' : w.state === 'missed' ? '\u2717 ' : ''}W{w.n} {w.done}/{w.target}
+                {w.state === 'complete' ? '\u2713 ' : ''}W{w.n} {w.done}/{w.target}
               </span>
             ))}
           </div>
+          <p style={{ fontSize: 13, color: 'var(--gold-soft)', marginTop: 8, fontWeight: 600 }}>
+            {gate.weekends_complete} of {gate.weekends_total} complete
+          </p>
           {gate.current_weekend && (
-            <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 8 }}>
-              {gate.current_weekend.state === 'open'
-                ? `Weekend ${gate.current_weekend.n} of ${gate.weekends_total} is open \u2014 ${gate.current_weekend.done} of ${gate.current_weekend.target} logged (${gate.current_weekend.label}).`
-                : `Weekend ${gate.current_weekend.n} opens ${gate.current_weekend.label}.`}
+            <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+              {gate.behind > 0
+                ? `You're ${gate.owed_now} behind. Log those first, then weekend ${gate.current_weekend.n + (gate.behind > 0 ? 0 : 0)}'s 10 \u2014 next window ${gate.current_weekend.label}.`
+                : `Next up: weekend ${gate.current_weekend.n}, ${gate.current_weekend.target - gate.current_weekend.done} more (${gate.current_weekend.label}).`}
             </p>
           )}
           <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginTop: 4 }}>
