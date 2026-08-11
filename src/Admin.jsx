@@ -1057,6 +1057,20 @@ function AdminLeaderboard({ admin }) {
       <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 16 }}>
         {view === 'live' ? 'Live trades only' : view === 'backtest' ? 'Backtest trades only' : 'Live + backtest combined'} — ranked by blended score (cumulative % + consistency + streak). Only you can see this.
       </p>
+      <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name or email\u2026"
+          style={{ flex: 1, minWidth: 200, margin: 0 }} />
+        <div className="gcal-seg">
+          {FILTERS.map(([id, label]) => (
+            <button key={id} className={only === id ? 'on' : ''} onClick={() => setOnly(id)}>{label}</button>
+          ))}
+        </div>
+        <span style={{ fontSize: 12.5, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
+          {shown.length} of {rows.length}
+        </span>
+      </div>
+
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="grid">
           <thead><tr><th>#</th><th>Student</th><th>Levels</th><th>Score</th><th>Cum %</th><th>Net R/$</th><th>Win</th><th>Streak</th><th>Trades</th></tr></thead>
@@ -1086,6 +1100,8 @@ function AdminLeaderboard({ admin }) {
 function Billing({ admin }) {
   const [rows, setRows] = useState(null);
   const [edit, setEdit] = useState(null); // { row, plan }
+  const [q, setQ] = useState('');
+  const [only, setOnly] = useState('all');   // all | overdue | due_soon | inactive
   const load = () => call('admin_billing_overview', { admin_id: admin.id }).then((d) => setRows(d.rows)).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
   if (!rows) return <div className="spinner" />;
@@ -1105,6 +1121,19 @@ function Billing({ admin }) {
 
   const recordPay = (id, plan) => call('admin_record_payment', { admin_id: admin.id, user_id: id, plan }).then(load);
 
+  // Search name or email; the filters answer the questions actually asked of
+  // this screen — who owes money, who is about to, and who is on nothing.
+  const term = q.trim().toLowerCase();
+  const shown = rows.filter((r) => {
+    if (term && !(`${r.name} ${r.email}`.toLowerCase().includes(term))) return false;
+    const st = [r.pm, r.v1v1];
+    if (only === 'overdue') return st.some((t) => t?.active && t.status === 'overdue');
+    if (only === 'due_soon') return st.some((t) => t?.active && t.status === 'due_soon');
+    if (only === 'inactive') return !r.pm?.active && !r.v1v1?.active;
+    return true;
+  });
+  const FILTERS = [['all', 'All'], ['overdue', 'Overdue'], ['due_soon', 'Due soon'], ['inactive', 'Not billing']];
+
   return (
     <div>
       <div className="stat-row">
@@ -1122,7 +1151,7 @@ function Billing({ admin }) {
             <th>Actions</th>
           </tr></thead>
           <tbody>
-            {rows.map((r) => (
+            {shown.map((r) => (
               <tr key={r.id}>
                 <td><div style={{ fontWeight: 600 }}>{r.name}</div><div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{r.email}</div></td>
                 <td>{tag(r.pm)}{r.overdue_suspended ? <span style={{ fontSize: 11, color: 'var(--red)', display: 'block' }}>suspended</span> : null}</td>
@@ -1139,6 +1168,11 @@ function Billing({ admin }) {
             ))}
           </tbody>
         </table>
+        {shown.length === 0 && (
+          <div style={{ padding: '26px 18px', textAlign: 'center', fontSize: 13, color: 'var(--ink-faint)' }}>
+            No students match{term ? ` “${q.trim()}”` : ''}{only !== 'all' ? ' in this filter' : ''}.
+          </div>
+        )}
       </div>
       <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 10 }}>“+PM” / “+1v1” record a payment and extend that plan by 30 days. “date” buttons let you set a specific due date or switch a plan on/off. The two plans bill independently with their own dates and reminders.</p>
       {edit && <BillingModal admin={admin} row={edit.row} plan={edit.plan} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
