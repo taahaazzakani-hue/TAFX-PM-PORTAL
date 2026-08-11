@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { call } from './api.js';
+import { call, callGates } from './api.js';
 
 const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
 
@@ -54,24 +54,81 @@ function SubmitModal({ hw, user, onClose, onDone }) {
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
   const [busy, setBusy] = useState(false);
+  const [gate, setGate] = useState(undefined);   // journal-backed homework, if any
+
+  // Journal-backed levels prove the work from the journal itself, so there is
+  // nothing to paste a link to — the count is read live from their entries.
+  useEffect(() => {
+    callGates('gate_state', { user_id: user.id, level: hw.level })
+      .then((d) => setGate(d?.gated ? d : null))
+      .catch(() => setGate(null));
+  }, [hw.level]);
+
+  const journalBacked = !!gate;
+  const logged = gate?.backtests_logged || 0;
+  const required = gate?.required || 0;
+  const short = journalBacked && logged < required;
+
   async function submit() {
     setBusy(true);
-    try { await call('homework_submit', { homework_id: hw.id, user_id: user.id, text, link }); onDone(); }
-    finally { setBusy(false); }
+    try {
+      await call('homework_submit', {
+        homework_id: hw.id, user_id: user.id, text,
+        link: journalBacked ? `journal:${logged}/${required}` : link,
+      });
+      onDone();
+    } finally { setBusy(false); }
   }
+
+  if (gate === undefined) return <div className="modal-back"><div className="modal"><div className="spinner" /></div></div>;
+
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="serif">Submit: {hw.title}</h3>
-        <div className="field"><label>Your answer / notes</label>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your response…" />
+
+        {journalBacked ? (
+          <>
+            <div className={short ? 'notice' : 'notice info'} style={{ marginBottom: 14 }}>
+              <b>{logged} of {required}</b> TA Model backtests logged in your journal.
+              {short
+                ? ' You can still submit, but Taaha reviews the journal itself — finish the rest first if you can.'
+                : ' Your journal entries are what gets reviewed — nothing to attach.'}
+            </div>
+            {(gate.weekends || []).length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                {gate.weekends.map((w) => (
+                  <span key={w.n} className="status-tag" title={w.label} style={{
+                    border: '1px solid var(--line)',
+                    color: w.state === 'complete' ? 'var(--green)'
+                      : w.state === 'missed' ? 'var(--red)'
+                      : w.state === 'open' ? 'var(--gold)' : 'var(--ink-faint)',
+                  }}>
+                    {w.state === 'complete' ? '\u2713 ' : w.state === 'missed' ? '\u2717 ' : ''}W{w.n} {w.done}/{w.target}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : null}
+
+        <div className="field"><label>{journalBacked ? 'What did you learn? Where did the model give you trouble?' : 'Your answer / notes'}</label>
+          <textarea value={text} onChange={(e) => setText(e.target.value)}
+            placeholder={journalBacked ? 'Tell your mentor what the backtests taught you\u2026' : 'Type your response\u2026'} />
         </div>
-        <div className="field"><label>Link (optional — TradingView, Drive, etc.)</label>
-          <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…" />
-        </div>
+
+        {!journalBacked && (
+          <div className="field"><label>Link (optional — TradingView, Drive, etc.)</label>
+            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://\u2026" />
+          </div>
+        )}
+
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn" onClick={submit} disabled={busy || (!text && !link)}>{busy ? 'Submitting…' : 'Submit'}</button>
+          <button className="btn" onClick={submit}
+            disabled={busy || (journalBacked ? !text.trim() : (!text && !link))}>
+            {busy ? 'Submitting\u2026' : journalBacked ? 'Submit my journal' : 'Submit'}
+          </button>
         </div>
       </div>
     </div>
