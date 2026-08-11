@@ -2248,7 +2248,7 @@ function GatePanel({ admin }) {
         }}>
           {st.weekends_complete > 0 ? '\u2713 ' : ''}{st.weekends_complete}/{d.weekends_total}
         </span>
-        {st.behind > 0 && <span className="status-tag s-rejected">{st.owed_now} behind</span>}
+        {st.weekends_missed > 0 && <span className="status-tag s-rejected">{st.weekends_missed} missed</span>}
         {(st.weekends || []).map((w) => (
           <span key={w.n} className="status-tag" title={w.label} style={{
             border: '1px solid var(--line)',
@@ -2256,7 +2256,7 @@ function GatePanel({ admin }) {
               : w.state === 'missed' ? 'var(--red)'
               : w.state === 'open' ? 'var(--gold)' : 'var(--ink-faint)',
           }}>
-            {w.state === 'complete' ? '\u2713 ' : ''}W{w.n} {w.done}/{w.target}
+            {w.state === 'complete' ? '\u2713 ' : w.state === 'missed' ? '\u2717 ' : ''}W{w.n} {w.done}/{w.target}
           </span>
         ))}
         {st.custom_start && (
