@@ -2242,14 +2242,23 @@ function GatePanel({ admin }) {
         }}>
           {st.backtests_logged} / {d.required} TA Model backtests
         </span>
-        {d.milestone_target != null && (
-          <span className="status-tag" style={{
+        <span className="status-tag" style={{
+          border: '1px solid var(--line)',
+          color: st.weekends_complete > 0 ? 'var(--green)' : 'var(--ink-faint)', fontWeight: 700,
+        }}>
+          {st.weekends_complete > 0 ? '\u2713 ' : ''}{st.weekends_complete}/{d.weekends_total}
+        </span>
+        {st.behind > 0 && <span className="status-tag s-rejected">{st.owed_now} behind</span>}
+        {(st.weekends || []).map((w) => (
+          <span key={w.n} className="status-tag" title={w.label} style={{
             border: '1px solid var(--line)',
-            color: st.milestone_met ? 'var(--green)' : 'var(--ink-faint)',
+            color: w.state === 'complete' ? 'var(--green)'
+              : w.state === 'missed' ? 'var(--red)'
+              : w.state === 'open' ? 'var(--gold)' : 'var(--ink-faint)',
           }}>
-            weekend {st.milestone_done} / {d.milestone_target}
+            {w.state === 'complete' ? '\u2713 ' : ''}W{w.n} {w.done}/{w.target}
           </span>
-        )}
+        ))}
         {st.custom_start && (
           <span className="status-tag s-pending" title={`Starts ${st.starts_label || ''}`}>
             Own window: {st.starts_label || 'custom'}{st.ends_label ? ` → ${st.ends_label}` : ''}
@@ -2287,10 +2296,11 @@ function GatePanel({ admin }) {
         backtest target. Counts are read live from their journals, so you can check the
         claim before approving.
       </p>
-      {d.milestone_label && (
+      {d.current_weekend && (
         <div className="notice info" style={{ marginBottom: 10 }}>
-          <b>This weekend:</b> {d.milestone_label}. Sections unlock at {d.required} in total —
-          the weekend target is pacing, not the unlock.
+          <b>Weekend {d.current_weekend.n} of {d.weekends_total}:</b> {d.current_weekend.target} backtests, {d.current_weekend.label}.
+          Progress is cumulative — anyone who fell short catches up the shortfall first,
+          then carries on with the next 10. Sections unlock at {d.required} in total.
         </div>
       )}
       {d.starts_label && (
