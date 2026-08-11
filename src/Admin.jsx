@@ -2299,8 +2299,11 @@ function GatePanel({ admin }) {
           </span>
         )}
         {st.deadline_passed && <span className="status-tag s-rejected">Deadline passed</span>}
-        <span className={`status-tag ${st.status === 'approved' ? 's-approved' : st.status === 'submitted' ? 's-pending' : 's-rejected'}`}>
-          {st.status === 'approved' ? 'Unlocked' : st.status === 'submitted' ? 'Awaiting you' : st.status === 'rejected' ? 'Sent back' : 'Not submitted'}
+        <span className={`status-tag ${['approved', 'exempt'].includes(st.status) ? 's-approved' : st.status === 'submitted' ? 's-pending' : 's-rejected'}`}>
+          {st.status === 'exempt' ? 'Exempt — all open'
+            : st.status === 'approved' ? 'Unlocked'
+            : st.status === 'submitted' ? 'Awaiting you'
+            : st.status === 'rejected' ? 'Sent back' : 'Not submitted'}
         </span>
       </div>
       {st.text && <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginTop: 10, whiteSpace: 'pre-wrap' }}>{st.text}</p>}
