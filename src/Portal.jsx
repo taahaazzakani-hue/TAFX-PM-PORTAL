@@ -387,15 +387,32 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
           ? `The TA Model backtest assignment opens ${gate.starts_label || 'soon'}. Everyone starts from zero — only backtests logged from then count.`
           : (gate?.locked_message || 'Complete the assignment to unlock this section.')}
       </p>
-      {!gate?.not_yet_open && gate?.milestone && !gate.milestone.passed && (
-        <p style={{ fontSize: 12.5, color: gate.milestone.met ? 'var(--green)' : 'var(--gold-soft)', marginTop: 6 }}>
-          {gate.milestone.met ? '✓ ' : ''}This weekend: {gate.milestone.done} of {gate.milestone.target} — {gate.milestone.label}
-        </p>
-      )}
-      {!gate?.not_yet_open && (
-        <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginTop: 4 }}>
-          Unlocks at {gate?.required || 40} backtests — {gate?.backtests_logged || 0} logged so far.
-        </p>
+      {!gate?.not_yet_open && (gate?.weekends || []).length > 0 && (
+        <>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+            {gate.weekends.map((w) => (
+              <span key={w.n} className="status-tag" title={w.label} style={{
+                border: '1px solid var(--line)',
+                color: w.state === 'complete' ? 'var(--green)'
+                  : w.state === 'missed' ? 'var(--red)'
+                  : w.state === 'open' ? 'var(--gold)' : 'var(--ink-faint)',
+                fontWeight: w.state === 'open' ? 700 : 500,
+              }}>
+                {w.state === 'complete' ? '\u2713 ' : w.state === 'missed' ? '\u2717 ' : ''}W{w.n} {w.done}/{w.target}
+              </span>
+            ))}
+          </div>
+          {gate.current_weekend && (
+            <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 8 }}>
+              {gate.current_weekend.state === 'open'
+                ? `Weekend ${gate.current_weekend.n} of ${gate.weekends_total} is open \u2014 ${gate.current_weekend.done} of ${gate.current_weekend.target} logged (${gate.current_weekend.label}).`
+                : `Weekend ${gate.current_weekend.n} opens ${gate.current_weekend.label}.`}
+            </p>
+          )}
+          <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginTop: 4 }}>
+            Unlocks at {gate?.required || 40} \u2014 {gate?.backtests_logged || 0} logged, {gate?.weekends_complete || 0} of {gate?.weekends_total || 4} weekends complete.
+          </p>
+        </>
       )}
       {gate?.not_yet_open ? (
         <p style={{ fontSize: 12.5, color: 'var(--gold-soft)', marginTop: 6 }}>
