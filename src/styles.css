@@ -622,3 +622,15 @@ table.grid td { padding: 12px; border-bottom: 1px solid var(--line); vertical-al
   .gcal-bar { padding: 14px 14px 12px; } .gcal-title { font-size: 19px; }
   .gcal-mc { min-height: 64px; padding: 4px 3px; } .gcal-foot { padding: 13px 14px; }
 }
+
+/* Locked course preview — visible to everyone, enrolment opens it. */
+.course-card.locked-card { cursor: pointer; }
+.course-card.locked-card .cover { position: relative; }
+.course-card.locked-card .ph { filter: grayscale(0.85) brightness(0.82); }
+.course-card.locked-card .body .ct { color: var(--ink-soft); }
+.lock-pill {
+  position: absolute; top: 10px; right: 10px; z-index: 2;
+  background: rgba(19,26,36,.78); color: #fff; backdrop-filter: blur(4px);
+  font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700;
+  padding: 5px 11px; border-radius: 999px;
+}
