@@ -120,6 +120,11 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
 
   const myLevels = user.levels || [];
   const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
+  // Courses shown to everyone as a locked preview. Enrolment is what unlocks
+  // them, so they stay visible — a student cannot want something invisible.
+  const PREVIEW_LEVELS = ['tas'];
+  const previewCourses = (content.courses || [])
+    .filter((c) => PREVIEW_LEVELS.includes(c.level) && !myLevels.includes(c.level));
   const originalCourse = courses.find((c) => c.level === 'original');
   const pmCourses = courses.filter((c) => c.level !== 'original');
   const hasJournal = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'].some((l) => myLevels.includes(l));
@@ -214,7 +219,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'pm' && (
-            <PMHome courses={pmCourses} content={content} courseProgress={courseProgress}
+            <PMHome courses={pmCourses} previewCourses={previewCourses} content={content} courseProgress={courseProgress}
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'journal' && hasJournal && <Journal user={user} confluences={content.confluences} />}
@@ -243,7 +248,8 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   );
 }
 
-function PMHome({ courses, content, courseProgress, onOpenCourse }) {
+function PMHome({ courses, previewCourses = [], content, courseProgress, onOpenCourse }) {
+  const [locked, setLocked] = useState(null);   // preview course the student tapped
   const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
   return (
     <div>
@@ -252,7 +258,7 @@ function PMHome({ courses, content, courseProgress, onOpenCourse }) {
         <h1>Private Mentorship</h1>
         <div className="meta">Your guided path through the stages — {courses.length} level{courses.length !== 1 ? 's' : ''} unlocked · mentored by Taaha Azzakani</div>
       </div>
-      {courses.length === 0 ? (
+      {courses.length === 0 && previewCourses.length === 0 ? (
         <div className="empty"><div className="big serif">No stages yet</div><div>Your mentor hasn't assigned a mentorship stage to your account yet. Your levels will appear here once they do.</div></div>
       ) : (
         <div className="dash-grid">
@@ -277,6 +283,40 @@ function PMHome({ courses, content, courseProgress, onOpenCourse }) {
               </div>
             );
           })}
+
+          {previewCourses.map((c) => (
+            <div className="course-card locked-card" key={c.id} onClick={() => setLocked(c)}>
+              <div className="cover">
+                <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
+                <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+                <div className="lock-pill">Locked</div>
+              </div>
+              <div className="body">
+                <div className="ct">{c.title}</div>
+                <div className="cm">{lessonsIn(c.id)} lesson{lessonsIn(c.id) !== 1 ? 's' : ''}</div>
+                <div className="foot">
+                  <span className="pct">Not enrolled</span>
+                  <span className="start">View →</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {locked && (
+        <div className="modal-back" onClick={() => setLocked(null)}>
+          <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <div className="brk-eyebrow">Locked</div>
+            <div className="serif" style={{ fontSize: 25, margin: '10px 0' }}>{locked.title}</div>
+            <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 420, margin: '0 auto' }}>
+              You're not enrolled in this course yet. Speak to Taaha about getting access
+              and it'll open up here.
+            </p>
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn" style={{ width: 'auto', padding: '11px 24px' }} onClick={() => setLocked(null)}>Got it</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
