@@ -18,6 +18,7 @@ const LEVELS = [
   { id: 'pm_intermediate', level: 'intermediate', title: 'I', full: 'Intermediate' },
   { id: 'pm_advanced_2', level: 'advanced2', title: 'A', full: 'Advanced' },
   { id: 'pm_1v1', level: '1v1', title: '1', full: '1v1' },
+  { id: 'pm_tas', level: 'tas', title: 'TAS', full: 'TA Scalping Model' },
 ];
 // Courses manageable in the Content tab. 1v1 is journal-only (no content),
 // so it is NOT listed here. TAFX Original IS a content course.
@@ -27,6 +28,7 @@ const CONTENT_COURSES = [
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
   { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course' },
   { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced' },
+  { id: 'pm_tas', level: 'tas', title: 'TA Scalping Model' },
 ];
 // Levels that have homework (journaling levels except 1v1 which is journal-only mentorship).
 const HOMEWORK_LEVELS = [
@@ -34,6 +36,7 @@ const HOMEWORK_LEVELS = [
   { level: 'intermediate', title: 'Intermediate' },
   { level: 'advanced', title: 'TAFX Advanced Course' },
   { level: 'advanced2', title: 'Advanced' },
+  { level: 'tas', title: 'TA Scalping Model' },
 ];
 
 export default function Admin({ user, onLogout, onUpdated }) {
@@ -893,7 +896,7 @@ function Avatar({ url, name, size = 44 }) {
   );
 }
 
-const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced', '1v1': '1v1' };
+const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced', '1v1': '1v1', tas: 'TA Scalping Model', original: 'TAFX Original' };
 const CUR_SYM = (c) => (c === 'USD' ? '$' : 'R');
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
