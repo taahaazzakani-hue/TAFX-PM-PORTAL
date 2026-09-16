@@ -633,4 +633,178 @@ table.grid td { padding: 12px; border-bottom: 1px solid var(--line); vertical-al
   background: rgba(19,26,36,.78); color: #fff; backdrop-filter: blur(4px);
   font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700;
   padding: 5px 11px; border-radius: 999px;
+}/* ============================================================
+   WHOP CHECKOUT — append this to the bottom of src/styles.css
+   ============================================================ */
+
+/* ---- Overlay ---- */
+.whop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, .84);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.whop-panel {
+  width: 100%;
+  max-width: 460px;
+  position: relative;
+  margin: auto;
+}
+
+.whop-x {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: .7;
+  transition: opacity .2s;
+}
+.whop-x:hover { opacity: 1; }
+
+.whop-head {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.whop-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #C9A84C;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.whop-price {
+  font-size: 26px;
+  font-weight: 700;
+  color: #F4F2EE;
+}
+.whop-price span {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(244, 242, 238, .5);
+  margin-left: 4px;
+}
+
+.whop-mount { min-height: 120px; }
+
+.whop-loading {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 13px;
+  color: rgba(244, 242, 238, .5);
+}
+
+.whop-fine {
+  font-size: 10.5px;
+  color: rgba(244, 242, 238, .35);
+  margin-top: 14px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ---- Upgrade card ---- */
+.whop-card {
+  background: #16171D;
+  border: 1px solid rgba(201, 168, 76, .25);
+  border-radius: 12px;
+  padding: 26px 24px;
+}
+
+.whop-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.whop-card-name {
+  font-size: 19px;
+  font-weight: 700;
+  color: #F4F2EE;
+  letter-spacing: .02em;
+}
+
+.whop-card-price {
+  font-size: 24px;
+  font-weight: 700;
+  color: #C9A84C;
+  white-space: nowrap;
+}
+.whop-card-price span {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(244, 242, 238, .45);
+  margin-left: 4px;
+}
+
+.whop-card-blurb {
+  font-size: 13.5px;
+  color: rgba(244, 242, 238, .6);
+  line-height: 1.65;
+  margin: 0 0 14px;
+}
+
+.whop-card-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.whop-card-list li {
+  font-size: 13px;
+  color: rgba(244, 242, 238, .68);
+  line-height: 1.5;
+  padding-left: 20px;
+  position: relative;
+  margin-bottom: 7px;
+}
+.whop-card-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #00C853;
+  font-weight: 700;
+}
+
+.whop-card-btn {
+  width: 100%;
+  background: #C9A84C;
+  color: #07080A;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border: none;
+  padding: 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .2s, transform .15s;
+}
+.whop-card-btn:hover {
+  background: #F0C96B;
+  transform: translateY(-1px);
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 560px) {
+  .whop-overlay { padding: 14px; }
+  .whop-x { top: -34px; }
+  .whop-card-top { flex-direction: column; gap: 4px; }
 }
