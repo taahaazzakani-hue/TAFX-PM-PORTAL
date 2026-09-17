@@ -12,6 +12,7 @@ import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
+import { WhopCheckoutModal } from './WhopCheckout.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced', pm_advanced_2: 'advanced2' };
@@ -219,7 +220,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'pm' && (
-            <PMHome courses={pmCourses} previewCourses={previewCourses} content={content} courseProgress={courseProgress}
+            <PMHome user={user} courses={pmCourses} previewCourses={previewCourses} content={content} courseProgress={courseProgress}
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'journal' && hasJournal && <Journal user={user} confluences={content.confluences} />}
@@ -248,13 +249,14 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   );
 }
 
-function PMHome({ courses, previewCourses = [], content, courseProgress, onOpenCourse }) {
+function PMHome({ user, courses, previewCourses = [], content, courseProgress, onOpenCourse }) {
   const [locked, setLocked] = useState(null);   // preview course the student tapped
+  const [buying, setBuying] = useState(null);   // plan key the student is checking out
   const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
   return (
     <div>
       <div className="hero-card">
-        <div className="eyebrow">TA Forex Institute</div>
+        <div className="eyebrow">TaahaFX</div>
         <h1>Private Mentorship</h1>
         <div className="meta">Your guided path through the stages — {courses.length} level{courses.length !== 1 ? 's' : ''} unlocked · mentored by Taaha Azzakani</div>
       </div>
@@ -310,14 +312,23 @@ function PMHome({ courses, previewCourses = [], content, courseProgress, onOpenC
             <div className="brk-eyebrow">Locked</div>
             <div className="serif" style={{ fontSize: 25, margin: '10px 0' }}>{locked.title}</div>
             <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 420, margin: '0 auto' }}>
-              You're not enrolled in this course yet. Speak to Taaha about getting access
-              and it'll open up here.
+              You're not enrolled in this course yet. Enrol below and it unlocks
+              here straight away.
             </p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn" style={{ width: 'auto', padding: '11px 24px' }} onClick={() => setLocked(null)}>Got it</button>
+            <div style={{ fontSize: 26, fontWeight: 700, margin: '16px 0 4px' }}>$65</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>once-off · lifetime access</div>
+            <div className="modal-actions" style={{ justifyContent: 'center', gap: 10 }}>
+              <button className="btn" style={{ width: 'auto', padding: '11px 24px' }}
+                onClick={() => { setBuying('scalping'); setLocked(null); }}>Enrol Now</button>
+              <button className="btn" style={{ width: 'auto', padding: '11px 24px', opacity: .6 }}
+                onClick={() => setLocked(null)}>Not now</button>
             </div>
           </div>
         </div>
+      )}
+
+      {buying && (
+        <WhopCheckoutModal planKey={buying} email={user?.email} onClose={() => setBuying(null)} />
       )}
     </div>
   );
@@ -335,7 +346,7 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
   return (
     <div>
       <div className="hero-card">
-        <div className="eyebrow">TA Forex Institute — Private Mentorship</div>
+        <div className="eyebrow">TaahaFX — Private Mentorship</div>
         <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
         <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
       </div>
