@@ -4,6 +4,7 @@ import { LegalFooter } from './Legal.jsx';
 import { BankModal } from './PayInfo.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
+import { WhopCheckoutModal } from './WhopCheckout.jsx';
 
 const PORTAL_URL = window.location.origin;
 
@@ -78,6 +79,7 @@ function LoginForm({ onAuthed, setMode }) {
   const [busy, setBusy] = useState(false);
   const [overdue, setOverdue] = useState(false);
   const [showBank, setShowBank] = useState(false);
+  const [payPlan, setPayPlan] = useState(null);   // 'private' | 'oneonone' when paying by card
 
   async function submit(e) {
     e.preventDefault();
@@ -88,7 +90,8 @@ function LoginForm({ onAuthed, setMode }) {
       onAuthed(user);
     } catch (e) {
       setErr(e.message);
-      if ((e.message || '').toLowerCase().includes('overdue')) setOverdue(true);
+      const msg = (e.message || '').toLowerCase();
+      if (msg.includes('overdue')) setOverdue(msg.includes('1v1') && !msg.includes('pm') ? '1v1' : 'pm');
     } finally { setBusy(false); }
   }
 
@@ -99,11 +102,28 @@ function LoginForm({ onAuthed, setMode }) {
       <p className="lead">Sign in to the TA Forex Institute mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
       {overdue && (
-        <button type="button" className="btn" style={{ marginBottom: 14 }} onClick={() => setShowBank(true)}>
-          How to pay & restore access
-        </button>
+        <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setPayPlan(overdue === '1v1' ? 'oneonone' : 'private')}
+          >
+            Pay now by card &amp; restore access
+          </button>
+          <button
+            type="button"
+            className="btn"
+            style={{ background: 'transparent', color: 'var(--ink-soft)', border: '1px solid var(--line, rgba(0,0,0,.15))' }}
+            onClick={() => setShowBank(true)}
+          >
+            Pay by EFT instead
+          </button>
+        </div>
       )}
-      {showBank && <BankModal plan="pm" overdue onClose={() => setShowBank(false)} />}
+      {showBank && <BankModal plan={overdue === '1v1' ? '1v1' : 'pm'} overdue onClose={() => setShowBank(false)} />}
+      {payPlan && (
+        <WhopCheckoutModal planKey={payPlan} email={email} onClose={() => setPayPlan(null)} />
+      )}
       <form onSubmit={submit}>
         <div className="field">
           <label>Email</label>
