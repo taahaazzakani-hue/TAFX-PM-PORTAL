@@ -1,4 +1,3 @@
-
 // ── Backend configuration ───────────────────────────────────────────
 const SUPABASE_URL = 'https://sicegpbjpulqbomkrrtn.supabase.co';
 const ANON_KEY =
@@ -49,7 +48,12 @@ async function post(url, action, body) {
     body: JSON.stringify({ action, ...body }),
   });
   const data = await res.json().catch(() => ({ error: 'Network error' }));
-  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  if (!res.ok) {
+    // Attach the rest of the error payload (e.g. billing_overdue, overdue_pm,
+    // overdue_1v1) onto the thrown Error so callers can branch on real fields
+    // instead of parsing the message string.
+    throw Object.assign(new Error(data.error || 'Something went wrong'), data);
+  }
   return data;
 }
 
