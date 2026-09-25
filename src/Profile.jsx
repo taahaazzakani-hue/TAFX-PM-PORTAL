@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { call, uploadImage, saveSession } from './api.js';
 import PasswordField from './PasswordField.jsx';
 
-export default function Profile({ user, onUpdated }) {
+export default function Profile({ user, onUpdated, initialNotice }) {
   const [f, setF] = useState({ name: user.name, phone: user.phone || '', avatar_url: user.avatar_url || '' });
   const [uploading, setUploading] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -44,7 +44,50 @@ export default function Profile({ user, onUpdated }) {
         <button className="btn" style={{ width: 'auto', padding: '11px 24px' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
       </div>
 
+      <DiscordLink user={user} onUpdated={onUpdated} initialNotice={initialNotice} />
       <ChangePassword user={user} />
+    </div>
+  );
+}
+
+function DiscordLink({ user, onUpdated, initialNotice }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(initialNotice || null);
+
+  async function link() {
+    setBusy(true); setMsg(null);
+    try {
+      const d = await call('discord_link_start', { user_id: user.id });
+      if (d.url) window.location.href = d.url;
+      else setMsg({ t: 'err', m: 'Could not start Discord linking.' });
+    } catch (e) { setMsg({ t: 'err', m: e.message }); setBusy(false); }
+  }
+  async function unlink() {
+    if (!confirm('Unlink your Discord account? Your Private Mentorship / 1v1 Discord roles will be removed.')) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call('discord_unlink', { user_id: user.id });
+      const merged = { ...user, discord_user_id: null }; saveSession(merged); onUpdated && onUpdated(merged);
+      setMsg({ t: 'ok', m: 'Discord unlinked.' });
+    } catch (e) { setMsg({ t: 'err', m: e.message }); } finally { setBusy(false); }
+  }
+
+  const linked = !!user.discord_user_id;
+  return (
+    <div className="card">
+      <h3>Discord</h3>
+      <div className="hint">
+        Link your Discord account to automatically get the Private Mentorship / 1v1 roles on our server, kept in sync with your subscription.
+      </div>
+      {msg && <div className={`notice ${msg.t}`}>{msg.m}</div>}
+      {linked ? (
+        <>
+          <div className="notice info" style={{ marginBottom: 12 }}>Your Discord account is linked.</div>
+          <button className="btn ghost" style={{ width: 'auto', padding: '11px 24px' }} onClick={unlink} disabled={busy}>{busy ? 'Unlinking…' : 'Unlink Discord'}</button>
+        </>
+      ) : (
+        <button className="btn" style={{ width: 'auto', padding: '11px 24px' }} onClick={link} disabled={busy}>{busy ? 'Redirecting…' : 'Link Discord'}</button>
+      )}
     </div>
   );
 }
