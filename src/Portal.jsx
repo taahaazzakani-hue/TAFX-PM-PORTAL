@@ -12,7 +12,7 @@ import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
-import { WhopCheckoutModal } from './WhopCheckout.jsx';
+import { StripeCheckoutModal } from './StripeCheckout.jsx';
 
 const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced', pm_advanced_2: 'advanced2' };
@@ -343,7 +343,7 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
       )}
 
       {buying && (
-        <WhopCheckoutModal planKey={buying} email={user?.email} onClose={() => setBuying(null)} />
+        <StripeCheckoutModal planKey={buying} email={user?.email} onClose={() => setBuying(null)} />
       )}
     </div>
   );
