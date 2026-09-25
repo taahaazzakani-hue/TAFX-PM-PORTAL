@@ -59,10 +59,25 @@ function BillingNotice({ billing, user }) {
   );
 }
 
+// Discord's OAuth consent screen redirects back to the portal's root with
+// ?discord=linked or ?discord=error&reason=... (see discord-oauth-callback).
+// Read it once, before React state exists, so a hard-reload landing here
+// with a stale ?discord= param from history never re-triggers the notice.
+function readDiscordReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const discord = params.get('discord');
+  if (!discord) return null;
+  const reason = params.get('reason');
+  window.history.replaceState({}, '', window.location.pathname);
+  if (discord === 'linked') return { t: 'ok', m: 'Discord linked — your roles will sync shortly.' };
+  return { t: 'err', m: `Couldn't link Discord${reason ? ` (${reason.replace(/_/g, ' ')})` : ''}. Please try again.` };
+}
+
 export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const [user, setUser] = useState(initialUser);
   const [content, setContent] = useState(null);
-  const [view, setView] = useState('dashboard');
+  const [discordReturn] = useState(readDiscordReturn);
+  const [view, setView] = useState(() => (discordReturn ? 'profile' : 'dashboard'));
   const [activeCourse, setActiveCourse] = useState(null);
   const [activeVideo, setActiveVideo] = useState(null);
   const [watched, setWatched] = useState(new Set(initialUser.watched_videos || []));
@@ -229,7 +244,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'calculator' && <RiskCalculator />}
           {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}
-          {view === 'profile' && <Profile user={user} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
+          {view === 'profile' && <Profile user={user} initialNotice={discordReturn} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
           {view === 'learn' && (
             courses.length === 0 ? (
               <div className="empty"><div className="big serif">Welcome</div><div>Your mentor hasn't assigned a stage to your account yet. You'll see your courses here once they do.</div></div>
