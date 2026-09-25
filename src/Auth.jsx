@@ -76,20 +76,25 @@ function LoginForm({ onAuthed, setMode }) {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [overdue, setOverdue] = useState(false);   // 'pm' | '1v1' | false
+  const [overduePm, setOverduePm] = useState(false);
+  const [overdue1v1, setOverdue1v1] = useState(false);
   const [payPlan, setPayPlan] = useState(null);   // 'private' | 'oneonone'
 
   async function submit(e) {
     e.preventDefault();
-    setErr(''); setOverdue(false); setBusy(true);
+    setErr(''); setOverduePm(false); setOverdue1v1(false); setBusy(true);
     try {
       const { user } = await call('login', { email, password });
       saveSession(user);
       onAuthed(user);
     } catch (e) {
       setErr(e.message);
-      const msg = (e.message || '').toLowerCase();
-      if (msg.includes('overdue')) setOverdue(msg.includes('1v1') && !msg.includes('pm') ? '1v1' : 'pm');
+      // pm-api sends overdue_pm / overdue_1v1 as real booleans on the error
+      // payload (post() in api.js attaches them to the thrown Error), so a
+      // student who owes on both plans at once gets a button for each —
+      // no more guessing from the message text, which broke when both were due.
+      setOverduePm(!!e.overdue_pm);
+      setOverdue1v1(!!e.overdue_1v1);
     } finally { setBusy(false); }
   }
 
@@ -99,15 +104,19 @@ function LoginForm({ onAuthed, setMode }) {
       <h1 className="serif">Welcome back</h1>
       <p className="lead">Sign in to the TA Forex Institute mentorship portal</p>
       {err && <div className="notice err">{err}</div>}
-      {overdue && (
-        <button
-          type="button"
-          className="btn"
-          style={{ marginBottom: 14 }}
-          onClick={() => setPayPlan(overdue === '1v1' ? 'oneonone' : 'private')}
-        >
-          Pay now &amp; restore access
-        </button>
+      {(overduePm || overdue1v1) && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          {overduePm && (
+            <button type="button" className="btn" onClick={() => setPayPlan('private')}>
+              Pay PM &amp; restore access
+            </button>
+          )}
+          {overdue1v1 && (
+            <button type="button" className="btn" onClick={() => setPayPlan('oneonone')}>
+              Pay 1-to-1 &amp; restore access
+            </button>
+          )}
+        </div>
       )}
       {payPlan && (
         <StripeCheckoutModal planKey={payPlan} email={email} onClose={() => setPayPlan(null)} />
