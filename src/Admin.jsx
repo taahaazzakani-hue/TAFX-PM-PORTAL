@@ -1120,7 +1120,11 @@ function Billing({ admin }) {
   const v1Active = rows.filter((r) => r.v1v1?.active);
   const pmOverdue = pmActive.filter((r) => r.pm.status === 'overdue').length;
   const v1Overdue = v1Active.filter((r) => r.v1v1.status === 'overdue').length;
-  const monthly = pmActive.length * 800 + v1Active.length * 2075;
+  // Per-student fee (r.pm.fee / r.v1v1.fee) already accounts for any custom
+  // override set on that student, falling back to the standard rate — so
+  // summing those instead of a flat constant keeps this total correct even
+  // when someone's on a non-standard price.
+  const monthly = pmActive.reduce((sum, r) => sum + (r.pm?.fee || 0), 0) + v1Active.reduce((sum, r) => sum + (r.v1v1?.fee || 0), 0);
 
   const recordPay = (id, plan) => call('admin_record_payment', { admin_id: admin.id, user_id: id, plan }).then(load);
 
@@ -1141,7 +1145,7 @@ function Billing({ admin }) {
     <div>
       <div className="stat-row">
         <div className="stat"><div className="v">{pmActive.length}</div><div className="l">On PM (R800)</div></div>
-        <div className="stat"><div className="v">{v1Active.length}</div><div className="l">On 1v1 (R2075)</div></div>
+        <div className="stat"><div className="v">{v1Active.length}</div><div className="l">On 1v1 (R2000)</div></div>
         <div className="stat"><div className="v" style={{ color: (pmOverdue + v1Overdue) ? 'var(--red)' : undefined }}>{pmOverdue + v1Overdue}</div><div className="l">Overdue (either)</div></div>
         <div className="stat"><div className="v">R{monthly.toLocaleString()}</div><div className="l">Monthly recurring</div></div>
       </div>
@@ -1150,7 +1154,7 @@ function Billing({ admin }) {
           <thead><tr>
             <th>Student</th>
             <th>PM (R800)</th><th>PM paid until</th>
-            <th>1v1 (R2075)</th><th>1v1 paid until</th>
+            <th>1v1 (R2000)</th><th>1v1 paid until</th>
             <th>Actions</th>
           </tr></thead>
           <tbody>
@@ -1185,7 +1189,7 @@ function Billing({ admin }) {
 
 function BillingModal({ admin, row, plan, onClose, onSaved }) {
   const track = plan === '1v1' ? row.v1v1 : row.pm;
-  const label = plan === '1v1' ? '1v1 (R2075/month)' : 'PM (R800/month)';
+  const label = `${plan === '1v1' ? '1v1' : 'PM'} (R${track?.fee ?? (plan === '1v1' ? 2000 : 800)}/month)`;
   const [active, setActive] = useState(!!track?.active);
   const [date, setDate] = useState(track?.paid_until ? new Date(track.paid_until).toISOString().slice(0, 10) : '');
   const [saving, setSaving] = useState(false);
@@ -1203,7 +1207,7 @@ function BillingModal({ admin, row, plan, onClose, onSaved }) {
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} style={{ width: 'auto' }} />
-            On the {plan === '1v1' ? '1v1 R2075' : 'PM R800'} monthly plan
+            On the {plan === '1v1' ? '1v1' : 'PM'} R{track?.fee ?? (plan === '1v1' ? 2000 : 800)} monthly plan
           </label>
         </div>
         <div className="field">
@@ -1297,7 +1301,7 @@ function StudentProfile({ admin, studentId, onBack }) {
         {/* Billing */}
         <div className="card" style={{ margin: 0 }}>
           <h3 style={{ marginTop: 0 }}>💳 Billing</h3>
-          <Row k="On R800 plan" v={b.active ? 'Yes' : 'No'} />
+          <Row k={`On R${b.fee ?? 800} plan`} v={b.active ? 'Yes' : 'No'} />
           <Row k="Paid until" v={fmtDay(b.paid_until)} />
           <Row k="Status" v={billTag.t} color={billTag.c} />
           {data.payments.length > 0 && (
