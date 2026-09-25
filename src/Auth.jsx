@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { call, saveSession } from './api.js';
 import { LegalFooter } from './Legal.jsx';
-import { WhopCheckoutModal } from './WhopCheckout.jsx';
+import { StripeCheckoutModal } from './StripeCheckout.jsx';
 import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
 import PasswordField from './PasswordField.jsx';
 
@@ -110,7 +110,7 @@ function LoginForm({ onAuthed, setMode }) {
         </button>
       )}
       {payPlan && (
-        <WhopCheckoutModal planKey={payPlan} email={email} onClose={() => setPayPlan(null)} />
+        <StripeCheckoutModal planKey={payPlan} email={email} onClose={() => setPayPlan(null)} />
       )}
       <form onSubmit={submit}>
         <div className="field">
