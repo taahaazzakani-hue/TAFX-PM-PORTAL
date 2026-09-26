@@ -18,7 +18,7 @@ const CHECKOUT_SESSION_URL = `${SUPABASE_URL}/functions/v1/create-checkout-sessi
 export const STRIPE_PLANS = {
   scalping: { id: 'price_1UJTlRPa6N6QL2tDPxUqkbhY', name: 'TA Scalping Model',  price: 'R999',   period: 'once-off' },
   course:   { id: 'price_1UJTmbPa6N6QL2tDP802Tfuf', name: 'TaahaFX Course',     price: 'R1 499', period: 'once-off' },
-  private:  { id: 'price_1UJTnmPa6N6QL2tDuzug9XNP', name: 'Private Mentorship', price: 'R800',   period: 'per month' },
+  private:  { id: 'price_1UJrQpPa6N6QL2tDXUyHC0hu', name: 'Private Mentorship', price: 'R800',   period: 'per month' },
   oneonone: { id: 'price_1UJToZPa6N6QL2tDLdbHHcBI', name: '1-to-1 Mentorship',  price: 'R2 000', period: 'per month' },
 };
 
