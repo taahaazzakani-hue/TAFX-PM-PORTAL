@@ -12,9 +12,79 @@ import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
-import { StripeCheckoutModal } from './StripeCheckout.jsx';
+import { StripeCheckoutModal, STRIPE_PLANS } from './StripeCheckout.jsx';
 
-const HERO = { pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
+/* Levels that show as a locked preview to students who don't own them, and
+   which Stripe plan each one checks out against. Prices and labels come from
+   STRIPE_PLANS so the portal can never show a figure Stripe won't charge. */
+const PLAN_FOR_LEVEL = {
+  beginner: 'private',
+  intermediate: 'private',
+  advanced2: 'private',
+  tas: 'scalping',
+};
+const PREVIEW_LEVELS = Object.keys(PLAN_FOR_LEVEL);
+
+/* One locked folder tile. Visible to everyone; opening it offers checkout. */
+function LockedCourseCard({ course, lessons, onClick }) {
+  const plan = STRIPE_PLANS[PLAN_FOR_LEVEL[course.level]];
+  return (
+    <div className="course-card locked-card" onClick={onClick}>
+      <div className="cover">
+        <img className="ph" src={HERO[course.id] || TEACH1} alt="" />
+        <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
+        <div className="lock-pill">Locked</div>
+      </div>
+      <div className="body">
+        <div className="ct">{course.title}</div>
+        <div className="cm">{lessons} lesson{lessons !== 1 ? 's' : ''}</div>
+        <div className="foot">
+          <span className="pct">{plan ? `${plan.price} ${plan.period}` : 'Not enrolled'}</span>
+          <span className="start">View →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* The offer shown when a locked folder is opened. */
+function LockedCourseModal({ course, onClose, onBuy }) {
+  const planKey = PLAN_FOR_LEVEL[course.level];
+  const plan = STRIPE_PLANS[planKey];
+  const monthly = plan?.period === 'per month';
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+        <div className="brk-eyebrow">Locked</div>
+        <div className="serif" style={{ fontSize: 25, margin: '10px 0' }}>{course.title}</div>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 420, margin: '0 auto' }}>
+          You can see this folder, but the lessons inside are locked until you
+          join. Enrol below and it unlocks here straight away.
+        </p>
+        {plan && (
+          <>
+            <div style={{ fontSize: 26, fontWeight: 700, margin: '16px 0 4px' }}>{plan.price}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              {monthly ? 'per month · cancel any time' : 'once-off · lifetime access'}
+            </div>
+          </>
+        )}
+        <div className="modal-actions" style={{ justifyContent: 'center', gap: 10 }}>
+          {plan && (
+            <button className="btn" style={{ width: 'auto', padding: '11px 24px' }}
+              onClick={() => onBuy(planKey)}>
+              {monthly ? `Join ${plan.name}` : 'Enrol Now'}
+            </button>
+          )}
+          <button className="btn" style={{ width: 'auto', padding: '11px 24px', opacity: .6 }}
+            onClick={onClose}>Not now</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const HERO ={ pm_original: TEACH1, pm_beginner: TEACH3, pm_intermediate: TEACH4, pm_advanced: TEACH2 };
 const LEVEL_OF = { pm_original: 'original', pm_beginner: 'beginner', pm_intermediate: 'intermediate', pm_advanced: 'advanced', pm_advanced_2: 'advanced2' };
 const initials = (n) => (n || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
@@ -138,11 +208,13 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
   // Courses shown to everyone as a locked preview. Enrolment is what unlocks
   // them, so they stay visible — a student cannot want something invisible.
-  const PREVIEW_LEVELS = ['tas'];
+  // Every level that can be bought self-serve previews; '1v1' is booked, not
+  // bought, and 'original'/'advanced' are sold off-portal, so they stay hidden.
   const previewCourses = (content.courses || [])
     .filter((c) => PREVIEW_LEVELS.includes(c.level) && !myLevels.includes(c.level));
   const originalCourse = courses.find((c) => c.level === 'original');
   const pmCourses = courses.filter((c) => c.level !== 'original');
+  const pmPreview = previewCourses.filter((c) => c.level !== 'tas');
   const hasJournal = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'].some((l) => myLevels.includes(l));
   const hasHomework = ['beginner', 'intermediate', 'advanced', 'advanced2'].some((l) => myLevels.includes(l));
   const course = courses.find((c) => c.id === activeCourse) || courses[0];
@@ -193,7 +265,16 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           </div>
           {pmOpen && (
             <div style={{ marginLeft: 14, borderLeft: '1px solid var(--line)', paddingLeft: 6 }}>
-              {pmCourses.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
+              {pmCourses.length === 0 && pmPreview.length === 0 && <div style={{ padding: '4px 12px', fontSize: 13, color: 'var(--ink-faint)' }}>No stages assigned yet.</div>}
+              {pmPreview.map((c) => (
+                <div key={c.id} className="nav-course">
+                  <div className="row" style={{ opacity: .62 }}
+                    onClick={() => { setView('pm'); setActiveVideo(null); setNavOpen(false); }}>
+                    <span className={`stage-dot dot-${c.level}`} />{c.title}
+                    <span className="prog-mini">🔒</span>
+                  </div>
+                </div>
+              ))}
               {pmCourses.map((c) => (
                 <div key={c.id} className="nav-course">
                   <div className={`row ${view === 'learn' && activeCourse === c.id ? 'active' : ''}`}
@@ -231,7 +312,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
         <div className="content">
           <BillingNotice billing={user.billing} user={user} />
           {view === 'dashboard' && (
-            <Dashboard user={user} courses={courses} content={content} courseProgress={courseProgress}
+            <Dashboard user={user} courses={courses} previewCourses={previewCourses} content={content} courseProgress={courseProgress}
               onOpenCourse={(cid) => { setActiveCourse(cid); setView('learn'); setActiveVideo(null); }} />
           )}
           {view === 'pm' && (
@@ -302,44 +383,14 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
           })}
 
           {previewCourses.map((c) => (
-            <div className="course-card locked-card" key={c.id} onClick={() => setLocked(c)}>
-              <div className="cover">
-                <img className="ph" src={HERO[c.id] || TEACH1} alt="" />
-                <div className="logo-badge"><img src={LOGO} alt="TA" /></div>
-                <div className="lock-pill">Locked</div>
-              </div>
-              <div className="body">
-                <div className="ct">{c.title}</div>
-                <div className="cm">{lessonsIn(c.id)} lesson{lessonsIn(c.id) !== 1 ? 's' : ''}</div>
-                <div className="foot">
-                  <span className="pct">Not enrolled</span>
-                  <span className="start">View →</span>
-                </div>
-              </div>
-            </div>
+            <LockedCourseCard key={c.id} course={c} lessons={lessonsIn(c.id)} onClick={() => setLocked(c)} />
           ))}
         </div>
       )}
 
       {locked && (
-        <div className="modal-back" onClick={() => setLocked(null)}>
-          <div className="modal" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-            <div className="brk-eyebrow">Locked</div>
-            <div className="serif" style={{ fontSize: 25, margin: '10px 0' }}>{locked.title}</div>
-            <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75, maxWidth: 420, margin: '0 auto' }}>
-              You're not enrolled in this course yet. Enrol below and it unlocks
-              here straight away.
-            </p>
-            <div style={{ fontSize: 26, fontWeight: 700, margin: '16px 0 4px' }}>$65</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>once-off · lifetime access</div>
-            <div className="modal-actions" style={{ justifyContent: 'center', gap: 10 }}>
-              <button className="btn" style={{ width: 'auto', padding: '11px 24px' }}
-                onClick={() => { setBuying('scalping'); setLocked(null); }}>Enrol Now</button>
-              <button className="btn" style={{ width: 'auto', padding: '11px 24px', opacity: .6 }}
-                onClick={() => setLocked(null)}>Not now</button>
-            </div>
-          </div>
-        </div>
+        <LockedCourseModal course={locked} onClose={() => setLocked(null)}
+          onBuy={(planKey) => { setBuying(planKey); setLocked(null); }} />
       )}
 
       {buying && (
@@ -349,14 +400,18 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
   );
 }
 
-function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
+function Dashboard({ user, courses, previewCourses = [], content, courseProgress, onOpenCourse }) {
   const [q, setQ] = useState('');
+  const [locked, setLocked] = useState(null);
+  const [buying, setBuying] = useState(null);
   const totalLessons = (content.videos || []).filter((v) => courses.some((c) => c.id === v.course_id)).length;
   const firstName = (user.name || '').split(' ')[0];
   const billing = user.billing;
   const dueStr = billing?.paid_until ? new Date(billing.paid_until).toLocaleDateString() : null;
   const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
-  const shown = q.trim() ? courses.filter((c) => c.title.toLowerCase().includes(q.trim().toLowerCase())) : courses;
+  const match = (c) => c.title.toLowerCase().includes(q.trim().toLowerCase());
+  const shown = q.trim() ? courses.filter(match) : courses;
+  const shownLocked = q.trim() ? previewCourses.filter(match) : previewCourses;
 
   return (
     <div>
@@ -384,7 +439,7 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
         </div>
       )}
 
-      {shown.length === 0 ? (
+      {shown.length === 0 && shownLocked.length === 0 ? (
         <div className="empty"><div className="big serif">{q ? 'No matches' : 'Welcome'}</div><div>{q ? `No courses match “${q}”.` : "Your mentor hasn't assigned a stage to your account yet. Your courses will appear here once they do."}</div></div>
       ) : (
         <div className="dash-grid">
@@ -409,7 +464,19 @@ function Dashboard({ user, courses, content, courseProgress, onOpenCourse }) {
               </div>
             );
           })}
+
+          {shownLocked.map((c) => (
+            <LockedCourseCard key={c.id} course={c} lessons={lessonsIn(c.id)} onClick={() => setLocked(c)} />
+          ))}
         </div>
+      )}
+
+      {locked && (
+        <LockedCourseModal course={locked} onClose={() => setLocked(null)}
+          onBuy={(planKey) => { setBuying(planKey); setLocked(null); }} />
+      )}
+      {buying && (
+        <StripeCheckoutModal planKey={buying} email={user?.email} onClose={() => setBuying(null)} />
       )}
     </div>
   );
