@@ -1,7 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { call, callGates } from './api.js';
 
-const LEVEL_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' };
+// Keep in step with LV_LABEL in Admin.jsx. 'advanced' is the TAFX Advanced
+// Course; 'advanced2' is the final PM tier, renamed Scalping Model Mentorship.
+const LEVEL_LABEL = {
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'TAFX Advanced Course',
+  advanced2: 'Scalping Model Mentorship',
+  tas: 'TA Scalping Model',
+  original: 'TAFX Original',
+  '1v1': '1v1',
+};
+const lvLabel = (l) => LEVEL_LABEL[l] || l;
 
 export default function Homework({ user }) {
   const [data, setData] = useState(null);
@@ -23,14 +34,14 @@ export default function Homework({ user }) {
   return (
     <div>
       <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 18 }}>
-        You see homework only for the stage(s) you have access to: <b>{data.levels.map((l) => LEVEL_LABEL[l]).join(', ')}</b>.
+        You see homework only for the stage(s) you have access to: <b>{data.levels.map((l) => lvLabel(l)).join(', ')}</b>.
       </p>
       {data.homework.map((hw) => {
         const sub = subFor(hw.id);
         return (
           <div className="card" key={hw.id}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="status-tag s-approved" style={{ textTransform: 'capitalize' }}>{LEVEL_LABEL[hw.level]}</span>
+              <span className="status-tag s-approved" style={{ textTransform: 'capitalize' }}>{lvLabel(hw.level)}</span>
               {hw.due_date && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Due {new Date(Number(hw.due_date)).toLocaleDateString()}</span>}
               {sub && <span className="status-tag s-pending" style={{ marginLeft: 'auto' }}>Submitted</span>}
             </div>

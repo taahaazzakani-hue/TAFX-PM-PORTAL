@@ -16,7 +16,7 @@ const LEVELS = [
   { id: 'pm_advanced', level: 'advanced', title: 'AC', full: 'TAFX Advanced Course' },
   { id: 'pm_beginner', level: 'beginner', title: 'B', full: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'I', full: 'Intermediate' },
-  { id: 'pm_advanced_2', level: 'advanced2', title: 'A', full: 'Advanced' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'SM', full: 'Scalping Model Mentorship' },
   { id: 'pm_1v1', level: '1v1', title: '1', full: '1v1' },
   { id: 'pm_tas', level: 'tas', title: 'TAS', full: 'TA Scalping Model' },
 ];
@@ -27,7 +27,7 @@ const CONTENT_COURSES = [
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate' },
   { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course' },
-  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'Scalping Model Mentorship' },
   { id: 'pm_tas', level: 'tas', title: 'TA Scalping Model' },
 ];
 // Levels that have homework (journaling levels except 1v1 which is journal-only mentorship).
@@ -35,7 +35,7 @@ const HOMEWORK_LEVELS = [
   { level: 'beginner', title: 'Beginner' },
   { level: 'intermediate', title: 'Intermediate' },
   { level: 'advanced', title: 'TAFX Advanced Course' },
-  { level: 'advanced2', title: 'Advanced' },
+  { level: 'advanced2', title: 'Scalping Model Mentorship' },
   { level: 'tas', title: 'TA Scalping Model' },
 ];
 
@@ -106,7 +106,7 @@ const DASH_LEVELS = [
   { id: 'pm_beginner', level: 'beginner', title: 'Beginner', dot: '#6fae7d' },
   { id: 'pm_intermediate', level: 'intermediate', title: 'Intermediate', dot: '#1f5fbf' },
   { id: 'pm_advanced', level: 'advanced', title: 'TAFX Advanced Course', dot: '#b06a9c' },
-  { id: 'pm_advanced_2', level: 'advanced2', title: 'Advanced', dot: '#8b6fc0' },
+  { id: 'pm_advanced_2', level: 'advanced2', title: 'Scalping Model Mentorship', dot: '#8b6fc0' },
 ];
 
 function AdminDashboard({ admin, goTo }) {
@@ -896,7 +896,7 @@ function Avatar({ url, name, size = 44 }) {
   );
 }
 
-const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced', '1v1': '1v1', tas: 'TA Scalping Model', original: 'TAFX Original' };
+const LV_LABEL = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Scalping Model Mentorship', '1v1': '1v1', tas: 'TA Scalping Model', original: 'TAFX Original' };
 const CUR_SYM = (c) => (c === 'USD' ? '$' : 'R');
 const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1060,19 +1060,6 @@ function AdminLeaderboard({ admin }) {
       <p style={{ color: 'var(--ink-soft)', fontSize: 13, marginBottom: 16 }}>
         {view === 'live' ? 'Live trades only' : view === 'backtest' ? 'Backtest trades only' : 'Live + backtest combined'} — ranked by blended score (cumulative % + consistency + streak). Only you can see this.
       </p>
-      <div className="card" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Search name or email\u2026"
-          style={{ flex: 1, minWidth: 200, margin: 0 }} />
-        <div className="gcal-seg">
-          {FILTERS.map(([id, label]) => (
-            <button key={id} className={only === id ? 'on' : ''} onClick={() => setOnly(id)}>{label}</button>
-          ))}
-        </div>
-        <span style={{ fontSize: 12.5, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
-          {shown.length} of {rows.length}
-        </span>
-      </div>
 
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="grid">
@@ -1149,6 +1136,19 @@ function Billing({ admin }) {
         <div className="stat"><div className="v" style={{ color: (pmOverdue + v1Overdue) ? 'var(--red)' : undefined }}>{pmOverdue + v1Overdue}</div><div className="l">Overdue (either)</div></div>
         <div className="stat"><div className="v">R{monthly.toLocaleString()}</div><div className="l">Monthly recurring</div></div>
       </div>
+
+      <div className="admin-tabs">
+        {FILTERS.map(([k, label]) => (
+          <button key={k} className={only === k ? 'active' : ''} onClick={() => setOnly(k)}>{label}</button>
+        ))}
+      </div>
+      <SearchBox value={q} onChange={setQ} placeholder="Search name or email…" />
+      {(term || only !== 'all') && (
+        <div style={{ fontSize: 12, color: 'var(--ink-faint)', margin: '-8px 0 14px' }}>
+          Showing {shown.length} of {rows.length} student{rows.length !== 1 ? 's' : ''}.
+        </div>
+      )}
+
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table className="grid">
           <thead><tr>
@@ -1237,7 +1237,7 @@ function StudentProfile({ admin, studentId, onBack }) {
   const initials = (s.name || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
   const fmtDate = (ms) => ms ? new Date(Number(ms)).toLocaleString() : '—';
   const fmtDay = (ms) => ms ? new Date(Number(ms)).toLocaleDateString() : '—';
-  const LV = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Advanced' };
+  const LV = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'TAFX Advanced Course', advanced2: 'Scalping Model Mentorship' };
   const billMap = { overdue: { t: 'Overdue', c: 'var(--red)' }, due_soon: { t: `Due in ${b.daysLeft}d`, c: 'var(--gold)' }, ok: { t: 'Active', c: 'var(--green)' }, none: { t: 'Not on plan', c: 'var(--ink-faint)' } };
   const billTag = billMap[b.status] || billMap.none;
   const pct = data.totalVideos ? Math.round((data.watchedCount / data.totalVideos) * 100) : 0;
