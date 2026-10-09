@@ -47,7 +47,7 @@ export default function Homework({ user }) {
             </div>
             <h3 style={{ marginTop: 10 }}>{hw.title}</h3>
             {hw.body && <p style={{ color: 'var(--ink-soft)', fontSize: 14, whiteSpace: 'pre-wrap', marginTop: 6 }}>{hw.body}</p>}
-            {hw.pdf_url && <a className="resource-card" href={hw.pdf_url} target="_blank" rel="noreferrer"><div className="ico">📄</div><div><div className="rn">{hw.pdf_name || 'Attached PDF'}</div><div className="rs">Tap to open</div></div></a>}
+            {hw.pdf_url && <a className="resource-card" href={hw.pdf_url} target="_blank" rel="noreferrer"><div className="ico">PDF</div><div><div className="rn">{hw.pdf_name || 'Attached PDF'}</div><div className="rs">Tap to open</div></div></a>}
             {!sub ? (
               <button className="btn" style={{ width: 'auto', padding: '10px 18px', marginTop: 14 }} onClick={() => setActive(hw)}>Submit homework</button>
             ) : (

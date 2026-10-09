@@ -1,0 +1,42 @@
+.forex-hero { position: relative; overflow: hidden; background: #0b1626; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; min-height: 380px; isolation: isolate; }
+.forex-hero--page { border-radius: var(--radius-lg); margin-bottom: 22px; box-shadow: 0 24px 56px rgba(11,22,38,.28); min-height: 340px; }
+.forex-hero--auth { width: 100%; min-height: 440px; }
+.forex-hero__stage { position: absolute; inset: 0; z-index: 0; }
+.forex-hero__video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.forex-hero__grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(138,182,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(138,182,255,.08) 1px, transparent 1px); background-size: 56px 56px; }
+.forex-hero .forex-hero__chart { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; opacity: .95; }
+.forex-hero__chart .portal-motion__canvas, .forex-hero__chart .portal-motion__fallback { width: 100%; height: 100%; }
+.forex-hero__chart svg { width: 100% !important; height: 100% !important; }
+.forex-hero__shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(11,22,38,.88) 0%, rgba(11,22,38,.55) 55%, rgba(11,22,38,.15) 100%), linear-gradient(0deg, rgba(11,22,38,.7), transparent 45%); }
+.forex-hero__body { position: relative; z-index: 2; padding: 56px 56px 20px; max-width: 760px; }
+.forex-hero--page .forex-hero__body { padding: 44px 44px 16px; }
+.forex-hero__logo { width: 64px; background: rgba(255,255,255,.95); border-radius: 16px; padding: 8px; display: block; margin-bottom: 18px; }
+.forex-hero__eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .24em; text-transform: uppercase; color: #9cc0ff; margin-bottom: 12px; }
+.forex-hero__title { font-family: var(--serif); font-weight: 400; font-size: 60px; line-height: 1; letter-spacing: -.01em; color: #fff; text-shadow: 0 2px 24px rgba(11,22,38,.6); }
+.forex-hero__desc { margin-top: 16px; font-size: 15px; line-height: 1.65; color: rgba(255,255,255,.85); max-width: 560px; }
+.forex-hero .meta { color: rgba(255,255,255,.82); font-size: 14px; margin-top: 14px; }
+.forex-hero__foot { position: relative; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 56px 18px; }
+.forex-hero--page .forex-hero__foot { padding: 10px 44px 18px; }
+.forex-hero__label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; color: rgba(255,255,255,.7); }
+.forex-hero__toggle { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.35); color: #fff; font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 999px; min-height: 36px; }
+.forex-hero__toggle:hover { background: rgba(255,255,255,.2); }
+.forex-hero__toggle:focus-visible { outline: 2px solid #9cc0ff; outline-offset: 2px; }
+.forex-hero__toggle:disabled { cursor: default; opacity: .65; }
+.forex-hero__features { display: flex; flex-wrap: wrap; gap: 10px 22px; list-style: none; margin-top: 20px; font-family: var(--mono); font-size: 11px; color: #b6c8e1; }
+.forex-hero__features li::before { content: ''; display: inline-block; width: 12px; height: 2px; margin-right: 8px; vertical-align: middle; background: #5599f7; }
+.auth-wrap--hero { display: flex; flex-direction: column; min-height: 100%; }
+.auth-wrap--hero .auth-form-side { flex: 1; padding-top: 36px; }
+.auth-wrap--hero .auth-form-side .auth-card { margin-top: 0; }
+@media (max-width: 900px) {
+  .forex-hero__title { font-size: 40px; }
+  .forex-hero--auth { min-height: 400px; }
+  .auth-wrap--hero .auth-form-side { padding: 0 16px 32px; }
+  .auth-wrap--hero .auth-form-side .auth-card { margin-top: 24px; }
+}
+@media (max-width: 640px) {
+  .forex-hero__body, .forex-hero--page .forex-hero__body { padding: 30px 20px 12px; }
+  .forex-hero__foot, .forex-hero--page .forex-hero__foot { padding: 8px 20px 16px; }
+  .forex-hero__title { font-size: 34px; }
+  .forex-hero__desc { font-size: 14px; }
+  .forex-hero__shade { background: linear-gradient(180deg, rgba(11,22,38,.25) 0%, rgba(11,22,38,.78) 100%); }
+}

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { call, saveSession } from './api.js';
 import { LegalFooter } from './Legal.jsx';
 import { StripeCheckoutModal } from './StripeCheckout.jsx';
-import { LOGO, TEACH1, TEACH2, TEACH5 } from './assets.js';
+import { LOGO } from './assets.js';
 import PasswordField from './PasswordField.jsx';
+import ForexHero from './ForexHero.jsx';
 
 const PORTAL_URL = window.location.origin;
 
@@ -18,7 +19,7 @@ function BrandMark() {
 
 const HERO_COPY = {
   login: {
-    h: 'Your edge is waiting inside.',
+    h: 'Your seat is waiting inside.',
     p: 'Pick up where you left off — your lessons, your journal, your numbers, and your mentor’s feedback, all in one place.',
   },
   register: {
@@ -39,27 +40,23 @@ export default function Auth({ onAuthed }) {
   const [mode, setMode] = useState('login'); // login | register | admin | forgot
   const copy = HERO_COPY[mode] || HERO_COPY.login;
   return (
-    <div className="auth-wrap">
-      <div className="auth-visual">
-        <img className="bg" src={mode === 'register' ? TEACH2 : mode === 'admin' ? TEACH5 : TEACH1} alt="" />
-        <div className="caption">
-          <div className="eyebrow" style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', opacity: .85, marginBottom: 10 }}>
-            TA Forex Institute
-          </div>
-          <div className="rule" />
-          <h2>{copy.h}</h2>
-          <p>{copy.p}</p>
-          {mode !== 'admin' && (
-            <div style={{ display: 'flex', gap: 18, marginTop: 22, flexWrap: 'wrap', fontSize: 12.5, opacity: .9 }}>
-              <span>Structured curriculum</span>
-              <span>·</span>
-              <span>1-on-1 mentor feedback</span>
-              <span>·</span>
-              <span>Trading journal & analytics</span>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="auth-wrap auth-wrap--hero">
+      <ForexHero
+        variant="auth"
+        as="h2"
+        logo={LOGO}
+        eyebrow="TA Forex Institute"
+        heading={copy.h}
+        description={copy.p}
+      >
+        {mode !== 'admin' && (
+          <ul className="forex-hero__features">
+            <li>Structured curriculum</li>
+            <li>1-on-1 mentor feedback</li>
+            <li>Trading journal &amp; analytics</li>
+          </ul>
+        )}
+      </ForexHero>
       <div className="auth-form-side">
         {mode === 'login' && <LoginForm onAuthed={onAuthed} setMode={setMode} />}
         {mode === 'register' && <RegisterForm setMode={setMode} />}
@@ -279,8 +276,8 @@ export function ResetPassword({ token, onDone }) {
     catch (err) { setMsg({ t: 'err', m: err.message }); } finally { setBusy(false); }
   }
   return (
-    <div className="auth-wrap">
-      <div className="auth-visual"><img className="bg" src={TEACH1} alt="" /><div className="caption"><div className="rule" /><h2>Set a new password</h2></div></div>
+    <div className="auth-wrap auth-wrap--hero">
+      <ForexHero variant="auth" as="h2" logo={LOGO} eyebrow="TA Forex Institute" heading="Set a new password" />
       <div className="auth-form-side">
         <div className="auth-card">
           <BrandMark />

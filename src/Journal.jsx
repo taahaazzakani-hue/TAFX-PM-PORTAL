@@ -167,7 +167,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
 
       {/* Journal / Analytics / Sessions sub-tabs */}
       <div style={{ display: 'flex', gap: 8, margin: '4px 0 20px', borderBottom: '1px solid var(--line)' }}>
-        {[['journal', '📓 Journal'], ['analytics', '📊 Analytics'], ...(readOnly ? [] : [['sessions', '🎯 Sessions']])].map(([k, lbl]) => (
+        {[['journal', 'Journal'], ['analytics', 'Analytics'], ...(readOnly ? [] : [['sessions', 'Sessions']])].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '10px 4px', marginBottom: -1, fontSize: 14, fontWeight: 600,
             color: tab === k ? 'var(--gold)' : 'var(--ink-soft)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`,
@@ -247,8 +247,8 @@ function TradeRow({ e, readOnly, onOpen, onEdit, onDel }) {
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{(e.confluences || []).join(' · ') || '—'}</div>
         </div>
         <div style={{ flex: 1 }} />
-        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>📷 {(e.images || []).length}</span>}
-        {e.admin_comment && <span title="Mentor comment" style={{ fontSize: 14 }}>💬</span>}
+        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{(e.images || []).length} attachments</span>}
+        {e.admin_comment && <span title="Mentor comment" className="comment-mark">Note</span>}
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
           <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>1:{e.rr} · {Number(e.amount) >= 0 ? '+' : ''}{CUR_SYM(e.currency)}{e.amount}</div>
@@ -275,7 +275,7 @@ function StatsSummary({ stats }) {
       </div>
       <div className="stat-row">
         <div className="stat"><div className="v" style={{ fontSize: 24 }}>1:{stats.avgRR || 0}</div><div className="l">Avg RR</div></div>
-        <div className="stat"><div className="v" style={{ fontSize: 24 }}>🔥 {stats.streak || 0}</div><div className="l">Day streak</div></div>
+        <div className="stat"><div className="v" style={{ fontSize: 24 }}>{stats.streak || 0}</div><div className="l">Day streak</div></div>
         <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--green)' }}>{(stats.best || 0) > 0 ? '+' : ''}{stats.best || 0}%</div><div className="l">Best trade</div></div>
         <div className="stat"><div className="v" style={{ fontSize: 24, color: 'var(--red)' }}>{stats.worst || 0}%</div><div className="l">Worst trade</div></div>
       </div>
@@ -312,7 +312,7 @@ function Insights({ dims }) {
           <div key={d.label} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 10, background: 'var(--panel-2)', fontSize: 13 }}>
             <div style={{ fontWeight: 700 }}>{d.icon} {d.label}</div>
             <div style={{ color: 'var(--green)' }}>⭐ Best: <b>{fmt(d.bw.best)}</b></div>
-            <div style={{ color: 'var(--red)' }}>⚠️ Worst: <b>{fmt(d.bw.worst)}</b></div>
+            <div style={{ color: 'var(--red)' }}>Worst: <b>{fmt(d.bw.worst)}</b></div>
           </div>
         ))}
       </div>
@@ -483,11 +483,11 @@ function AnalyticsPanel({ stats, entries, onDay }) {
       </div>
       {entries.length > 1 && <EquityCurve entries={entries} />}
       <Insights dims={[
-        { label: 'Day', icon: '📅', data: byDay },
-        { label: 'Session', icon: '🕐', data: stats.byKillzone },
-        { label: 'Model', icon: '📐', data: stats.byModel },
-        { label: 'Pair', icon: '💱', data: byPair },
-        { label: 'Tag', icon: '🏷', data: byTag },
+        { label: 'Day', icon: 'D', data: byDay },
+        { label: 'Session', icon: 'S', data: stats.byKillzone },
+        { label: 'Model', icon: 'M', data: stats.byModel },
+        { label: 'Pair', icon: 'P', data: byPair },
+        { label: 'Tag', icon: 'T', data: byTag },
       ]} />
       <BarChart title="Net % by day of week" hint="Which days actually make you money." rows={WEEKDAYS.map((d) => [d, byDay[d]])} />
       {hoursPresent.length > 0 && (
@@ -698,7 +698,7 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
         </div>
         {forceType ? (
           <div className="field"><label>Trade type</label>
-            <div style={{ fontSize: 13, color: 'var(--ink-soft)', padding: '10px 0' }}>{forceType === 'backtest' ? '🧪 Backtest' : '🟢 Live'} · saved to this session</div>
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', padding: '10px 0' }}>{forceType === 'backtest' ? 'Backtest' : 'Live'} · saved to this session</div>
           </div>
         ) : (
           <div className="field"><label>Trade type</label>
@@ -721,7 +721,7 @@ function EntryForm({ entry, confluences, tagLib = [], onCreateTag, onDeleteTag, 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
             {tagLib.length === 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>Create your own tags (e.g. "FOMO", "A+ setup", "News day") and reuse them on every trade.</span>}
             {tagLib.map((t) => { const on = (f.tags || []).includes(t); return (
-              <button key={t} type="button" onClick={() => toggleTag(t)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>🏷 {t}</button>
+              <button key={t} type="button" onClick={() => toggleTag(t)} style={{ padding: '6px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`, background: on ? 'var(--gold)' : 'var(--panel)', color: on ? '#fff' : 'var(--ink-soft)' }}>{t}</button>
             ); })}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
@@ -788,11 +788,11 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           <span>{entry.direction === 'long' ? '▲ Long' : '▼ Short'}</span>
           <span>RR 1:{entry.rr}</span>
           <span>P/L {CUR_SYM(entry.currency)}{entry.amount}</span>
-          {entry.killzone && <span>🕐 {entry.killzone}</span>}
-          {entry.model && <span>📐 {entry.model}</span>}
-          <span>{(entry.trade_type || 'live') === 'backtest' ? '🧪 Backtest' : '🟢 Live'}</span>
-          {entry.session_id && <span>🎯 Session</span>}
-          {(entry.tags || []).map((t) => <span key={t} className="pill" style={{ fontSize: 11 }}>🏷 {t}</span>)}
+          {entry.killzone && <span>{entry.killzone}</span>}
+          {entry.model && <span>{entry.model}</span>}
+          <span>{(entry.trade_type || 'live') === 'backtest' ? 'Backtest' : 'Live'}</span>
+          {entry.session_id && <span>Session</span>}
+          {(entry.tags || []).map((t) => <span key={t} className="pill" style={{ fontSize: 11 }}>{t}</span>)}
         </div>
         {(entry.confluences || []).length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>{entry.confluences.map((c) => <span key={c} className="pill">{c}</span>)}</div>}
         {entry.notes && <p style={{ fontSize: 14, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', marginBottom: 14 }}>{entry.notes}</p>}
@@ -810,7 +810,7 @@ function EntryDetail({ entry, readOnly, adminId, onClose, onCommented }) {
           </div>
         ) : entry.admin_comment ? (
           <div className="card" style={{ margin: 0, background: 'rgba(31,95,191,.06)', border: '1px solid rgba(31,95,191,.25)' }}>
-            <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginBottom: 4 }}>💬 Mentor feedback</div>
+            <div style={{ fontSize: 12, color: 'var(--gold-soft)', fontWeight: 600, marginBottom: 4 }}>Mentor feedback</div>
             <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{entry.admin_comment}</div>
             {entry.admin_comment_by && <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 6, fontWeight: 600 }}>— {entry.admin_comment_by}, Mentor</div>}
           </div>
@@ -901,7 +901,7 @@ function SessionsPanel({ user, activeLevel, allEntries, outerRanged = false, con
         <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h3 className="serif" style={{ margin: 0, fontSize: 24 }}>🎯 {open.name}</h3>
+              <h3 className="serif" style={{ margin: 0, fontSize: 24 }}>{open.name}</h3>
               <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Completed' : 'Active'}</span>
             </div>
             <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>
@@ -1009,7 +1009,7 @@ function SessionsPanel({ user, activeLevel, allEntries, outerRanged = false, con
             return (
               <div key={s.id} className="card" style={{ margin: 0, cursor: 'pointer' }} onClick={() => openSession(s.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎯 {s.name}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
                   <span className={`status-tag ${done ? 's-approved' : 's-pending'}`}>{done ? 'Done' : 'Active'}</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 4 }}>{s.instrument || 'All instruments'} · {fmtRange(es)}</div>

@@ -51,9 +51,9 @@ export default function Admin({ user, onLogout, onUpdated }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="sb-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={LOGO} alt="TA" style={{ width: 34 }} />
-            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Admin</div>
+          <div className="sb-brand">
+            <img src={LOGO} alt="TA" />
+            <div><div className="t">TaahaFX</div><div className="s">Admin</div></div>
           </div>
         </div>
         <div className="sb-body">
@@ -182,7 +182,7 @@ function AdminDashboard({ admin, goTo }) {
             ))}
             {dueSoon.map((u) => (
               <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 10, background: 'var(--panel-2)', fontSize: 13 }}>
-                <span>💳</span><div><b>{u.name}</b>'s subscription is due in {u.billing.daysLeft} day{u.billing.daysLeft !== 1 ? 's' : ''}</div>
+                <span className="admin-marker">Billing</span><div><b>{u.name}</b>'s subscription is due in {u.billing.daysLeft} day{u.billing.daysLeft !== 1 ? 's' : ''}</div>
                 <button className="mini-btn" style={{ marginLeft: 'auto' }} onClick={() => goTo('billing')}>Billing →</button>
               </div>
             ))}
@@ -457,8 +457,8 @@ function Content({ admin }) {
           }}
         >
           {draggable && <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--ink-faint)', fontSize: 14, letterSpacing: -2 }}>⠿</span>}
-          <span>{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? '📄' : '🎬'}</span>
-          <div><div className="ai-title">{v.title}</div><div className="ai-meta">{(v.lesson_type || 'video') === 'pdf' ? (v.pdf_url ? 'PDF lesson' : '⚠️ PDF lesson — no PDF uploaded') : (v.bunny_video_id ? `Bunny · ${String(v.bunny_video_id).slice(0, 8)}…` : 'No video')}{v.pdf_url ? ' · PDF' : ''}{subs.length ? ` · ${subs.length} sub-video${subs.length > 1 ? 's' : ''}` : ''}</div></div>
+          <span className="file-mark">{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? 'PDF' : 'VID'}</span>
+          <div><div className="ai-title">{v.title}</div><div className="ai-meta">{(v.lesson_type || 'video') === 'pdf' ? (v.pdf_url ? 'PDF lesson' : 'PDF lesson — no PDF uploaded') : (v.bunny_video_id ? `Bunny · ${String(v.bunny_video_id).slice(0, 8)}…` : 'No video')}{v.pdf_url ? ' · PDF' : ''}{subs.length ? ` · ${subs.length} sub-video${subs.length > 1 ? 's' : ''}` : ''}</div></div>
           <div className="sp" />
           {depth === 0 && <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: v.section_id, parent_video_id: v.id, lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: subs.length } })}>+ Sub-video</button>}
           <button className="mini-btn" onClick={() => setModal({ type: 'video', data: v })}>Edit</button>
@@ -483,7 +483,7 @@ function Content({ admin }) {
         style={{ ...base, outline: sectionHint ? '2px dashed var(--gold)' : undefined, outlineOffset: 3 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <span style={{ fontSize: 18 }}>{isSub ? '🗂️' : '📄'}</span>
+          <span className="file-mark">{isSub ? 'SUB' : 'SEC'}</span>
           <h3 style={{ margin: 0 }}>{s.title}</h3><div style={{ flex: 1 }} />
           <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: s.id, lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: sv.length } })}>+ Lesson</button>
           <button className="mini-btn" onClick={() => setModal({ type: 'section', data: s })}>Edit</button>
@@ -502,7 +502,7 @@ function Content({ admin }) {
             style={{ borderTop: dropHint?.id === r.id ? '2px solid var(--gold)' : '2px solid transparent', cursor: 'grab' }}
           >
             <span title="Drag to reorder" style={{ cursor: 'grab', color: 'var(--ink-faint)', fontSize: 14, letterSpacing: -2 }}>⠿</span>
-            <span>📄</span><div><div className="ai-title">{r.title}</div><div className="ai-meta">PDF resource</div></div>
+            <span className="file-mark">PDF</span><div><div className="ai-title">{r.title}</div><div className="ai-meta">PDF resource</div></div>
             <div className="sp" /><button className="mini-btn" onClick={() => setModal({ type: 'resource', data: r })}>Edit</button>
             <button className="mini-btn bad" onClick={() => del('resource', 'resource_id', r.id)}>Delete</button>
           </div>
@@ -517,7 +517,7 @@ function Content({ admin }) {
     return (
       <div className="card" style={{ borderLeft: '3px solid var(--gold)', background: 'var(--bg-2)' }} key={f.id}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: subs.length ? 14 : 6 }}>
-          <span style={{ fontSize: 20 }}>📁</span>
+          <span className="file-mark">DIR</span>
           <h3 style={{ margin: 0 }}>{f.title}</h3>
           <span className="pill" style={{ fontSize: 11 }}>Folder</span>
           <div style={{ flex: 1 }} />
@@ -540,7 +540,7 @@ function Content({ admin }) {
       </p>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: false, parent_id: null, sort_order: topLevel.length } })}>+ Add Section</button>
-        <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>📁 Add Folder</button>
+        <button className="mini-btn" onClick={() => setModal({ type: 'section', data: { title: '', is_folder: true, parent_id: null, sort_order: topLevel.length } })}>Add Folder</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'video', data: { title: '', section_id: videoContainers[0]?.id || '', lesson_type: 'video', bunny_library_id: '', bunny_video_id: '', description: '', pdf_url: '', pdf_name: '', sort_order: 0 } })}>+ Add lesson</button>
         <button className="mini-btn" onClick={() => setModal({ type: 'resource', data: { title: '', section_id: videoContainers[0]?.id || '', pdf_url: '', pdf_name: '', sort_order: 0 } })}>+ Add PDF</button>
       </div>
@@ -598,7 +598,7 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
     <div className="field">
       <label>Lesson type</label>
       <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
-        {[['video', '🎬 Video lesson'], ['pdf', '📄 PDF lesson']].map(([k, lbl]) => (
+        {[['video', 'Video lesson'], ['pdf', 'PDF lesson']].map(([k, lbl]) => (
           <button key={k} type="button" onClick={() => setType(k)} style={{
             cursor: 'pointer', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
             background: lType === k ? 'var(--ink)' : 'transparent',
@@ -616,7 +616,7 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
     {lType === 'video' && (<>
       <div className="field">
         <label>Video</label>
-        <button type="button" className="btn ghost" onClick={() => setPicker(true)} style={{ marginBottom: 8 }}>📼 Pick from my Bunny library</button>
+        <button type="button" className="btn ghost" onClick={() => setPicker(true)} style={{ marginBottom: 8 }}>Pick from my Bunny library</button>
         {f.bunny_video_id ? <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Linked: {String(f.bunny_video_id).slice(0, 12)}… (lib {f.bunny_library_id})</div> : <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>No video linked yet</div>}
       </div>
       <div className="row2">
@@ -629,7 +629,7 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
       <label>{lType === 'pdf' ? 'The PDF (this is the lesson)' : 'Lesson PDF (optional extra notes)'}</label>
       {f.pdf_url ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--bg-2)', marginBottom: 8 }}>
-          <span style={{ fontSize: 18 }}>📄</span>
+          <span className="file-mark">PDF</span>
           <a href={f.pdf_url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13, color: 'var(--gold)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.pdf_name || 'Attached PDF'}</a>
           <button type="button" className="mini-btn bad" onClick={() => setF({ ...f, pdf_url: '', pdf_name: '' })}>Remove</button>
         </div>
@@ -672,7 +672,7 @@ function BunnyPicker({ admin, onPick, onClose }) {
               <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                 {state.items.map((v) => (
                   <div key={v.guid} className="admin-item" style={{ cursor: 'pointer' }} onClick={() => onPick({ ...v, library_id: state.library_id })}>
-                    <span>🎬</span>
+                    <span className="file-mark">VID</span>
                     <div><div className="ai-title">{v.title || 'Untitled'}</div><div className="ai-meta">{v.status === 4 || v.status === 'finished' ? 'Ready' : 'Processing'} · {v.length ? Math.round(v.length / 60) + ' min' : ''}</div></div>
                     <div className="sp" /><button className="mini-btn good">Select</button>
                   </div>
@@ -706,7 +706,7 @@ function ResourceModal({ data, sections, onSave, onClose }) {
       <label>PDF file</label>
       {f.pdf_url ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 9, background: 'var(--bg-2)', marginBottom: 8 }}>
-          <span style={{ fontSize: 18 }}>📄</span>
+          <span className="file-mark">PDF</span>
           <a href={f.pdf_url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 13, color: 'var(--gold)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.pdf_name || 'Uploaded PDF'}</a>
           <button type="button" className="mini-btn bad" onClick={() => setF({ ...f, pdf_url: '', pdf_name: '' })}>Remove</button>
         </div>
@@ -996,8 +996,8 @@ function ReviewCard({ e, admin, onSaved, open, onToggle }) {
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{(e.confluences || []).join(' · ') || 'No confluences tagged'}</div>
         </div>
         <div style={{ flex: 1 }} />
-        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>📷 {(e.images || []).length}</span>}
-        {e.admin_comment && <span title="You commented">💬</span>}
+        {(e.images || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{(e.images || []).length} attachments</span>}
+        {e.admin_comment && <span title="You commented" className="comment-mark">Note</span>}
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>{pos ? '+' : ''}{e.pct}%</div>
           <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{Number(e.amount) >= 0 ? '+' : ''}{CUR_SYM(e.currency)}{e.amount}</div>
@@ -1012,7 +1012,7 @@ function ReviewCard({ e, admin, onSaved, open, onToggle }) {
               <ImageGallery images={e.images} />
             </div>
           )}
-          <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 6 }}>💬 Your feedback (the student sees this on their entry)</label>
+          <label style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 6 }}>Your feedback (the student sees this on their entry)</label>
           <textarea value={comment} onChange={(ev) => setComment(ev.target.value)} placeholder="Leave feedback on this trade…" style={{ width: '100%', minHeight: 70, background: 'var(--bg-2)', border: '1px solid var(--line)', color: 'var(--ink)', borderRadius: 9, padding: 12 }} />
           <button className="btn" style={{ width: 'auto', padding: '9px 20px', marginTop: 8 }} onClick={save} disabled={saving}>{saving ? 'Saving…' : e.admin_comment ? 'Update comment' : 'Save comment'}</button>
         </div>
@@ -1032,7 +1032,7 @@ function AdminLeaderboard({ admin }) {
   }, []);
   if (!boards) return <div className="spinner" />;
   const board = boards[view] || [];
-  const medal = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
+  const medal = (i) => `${i + 1}`;
   const VIEWS = [['live', 'Live'], ['backtest', 'Backtest'], ['all', 'All combined']];
   const switcher = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -1074,7 +1074,7 @@ function AdminLeaderboard({ admin }) {
                 <td style={{ color: r.cumPct >= 0 ? 'var(--green)' : 'var(--red)' }}>{r.cumPct > 0 ? '+' : ''}{r.cumPct}%</td>
                 <td style={{ color: r.cumAmt >= 0 ? 'var(--green)' : 'var(--red)' }}>{r.cumAmt > 0 ? '+' : ''}{r.cumAmt}</td>
                 <td>{r.winRate}%</td>
-                <td>🔥 {r.streak}</td>
+                <td>{r.streak}</td>
                 <td>{r.trades}</td>
               </tr>
             ))}
@@ -1281,16 +1281,16 @@ function StudentProfile({ admin, studentId, onBack }) {
 
       {/* Colored metric tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
-        <Tile icon="🎬" v={`${data.watchedCount}/${data.totalVideos}`} l="Lessons done" tint="#1f5fbf" />
-        <Tile icon="📓" v={st.trades || 0} l="Journal trades" tint="#7a5cf0" />
-        <Tile icon="📈" v={`${(st.cumPct || 0) > 0 ? '+' : ''}${st.cumPct || 0}%`} l="Cumulative %" tint={(st.cumPct || 0) >= 0 ? '#2f9463' : '#c0473f'} />
-        <Tile icon="💳" v={billTag.t} l="Billing" tint={billTag.c === 'var(--red)' ? '#c0473f' : billTag.c === 'var(--green)' ? '#2f9463' : billTag.c === 'var(--gold)' ? '#1f5fbf' : '#909aa8'} small />
+        <Tile icon="VID" v={`${data.watchedCount}/${data.totalVideos}`} l="Lessons done" tint="#1f5fbf" />
+        <Tile icon="LOG" v={st.trades || 0} l="Journal trades" tint="#245bb2" />
+        <Tile icon="P/L" v={`${(st.cumPct || 0) > 0 ? '+' : ''}${st.cumPct || 0}%`} l="Cumulative %" tint={(st.cumPct || 0) >= 0 ? '#2f9463' : '#c0473f'} />
+        <Tile icon="PAY" v={billTag.t} l="Billing" tint={billTag.c === 'var(--red)' ? '#c0473f' : billTag.c === 'var(--green)' ? '#2f9463' : billTag.c === 'var(--gold)' ? '#1f5fbf' : '#909aa8'} small />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Activity */}
         <div className="card" style={{ margin: 0 }}>
-          <h3 style={{ marginTop: 0 }}>⚡ Activity</h3>
+          <h3 style={{ marginTop: 0 }}>Activity</h3>
           <Row k="Last watched lesson" v={data.lastWatched ? data.lastWatched.title : '—'} />
           <Row k="Last watched at" v={data.lastWatched ? fmtDate(data.lastWatched.at) : '—'} />
           <Row k="Last login" v={fmtDate(s.last_login)} />
@@ -1300,7 +1300,7 @@ function StudentProfile({ admin, studentId, onBack }) {
 
         {/* Billing */}
         <div className="card" style={{ margin: 0 }}>
-          <h3 style={{ marginTop: 0 }}>💳 Billing</h3>
+          <h3 style={{ marginTop: 0 }}>Billing</h3>
           <Row k={`On R${b.fee ?? 800} plan`} v={b.active ? 'Yes' : 'No'} />
           <Row k="Paid until" v={fmtDay(b.paid_until)} />
           <Row k="Status" v={billTag.t} color={billTag.c} />
@@ -1320,20 +1320,20 @@ function StudentProfile({ admin, studentId, onBack }) {
 
       {/* Journal summary */}
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>📊 Journal summary</h3>
+        <h3 style={{ marginTop: 0 }}>Journal summary</h3>
         {(st.trades || 0) === 0 ? <div className="hint">No trades logged yet.</div> : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
             <MiniStat v={`${st.winRate}%`} l="Win rate" />
             <MiniStat v={`1:${st.avgRR}`} l="Avg RR" />
             <MiniStat v={`${st.cumAmt > 0 ? '+' : ''}${st.cumAmt}`} l="Net R/$" color={st.cumAmt >= 0 ? 'var(--green)' : 'var(--red)'} />
-            <MiniStat v={`🔥 ${st.streak}`} l="Streak" />
+            <MiniStat v={st.streak} l="Streak" />
           </div>
         )}
       </div>
 
       {/* Homework */}
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>📝 Homework submissions ({data.submissions.length})</h3>
+        <h3 style={{ marginTop: 0 }}>Homework submissions ({data.submissions.length})</h3>
         {data.submissions.length === 0 ? <div className="hint">No submissions yet.</div> : data.submissions.map((sub) => (
           <div key={sub.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
             {sub.text && <div style={{ fontSize: 14 }}>{sub.text}</div>}
@@ -1423,8 +1423,8 @@ function AuditLog({ admin }) {
                     <div style={{ fontSize: 10.5, color: 'var(--ink-faint)' }}>{roleTag(r.actor_scope)}</div>
                   </td>
                   <td style={{ fontSize: 13 }}>
-                    {isRisky(r.action) && <span style={{ color: 'var(--red)', fontWeight: 700, marginRight: 6 }}>⚠</span>}
-                    {isMoney(r.action) && <span style={{ marginRight: 6 }}>💳</span>}
+                    {isRisky(r.action) && <span style={{ color: 'var(--red)', fontWeight: 700, marginRight: 6 }}>Review</span>}
+                    {isMoney(r.action) && <span className="admin-marker">Billing</span>}
                     {r.summary}
                   </td>
                 </tr>

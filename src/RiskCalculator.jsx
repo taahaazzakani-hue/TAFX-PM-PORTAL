@@ -16,9 +16,9 @@ const SHADOW = '0 1px 2px rgba(19,26,36,.04), 0 6px 20px rgba(19,26,36,.06)';
 const SHADOW_LG = '0 10px 40px rgba(19,26,36,.10)';
 
 const INSTRUMENTS = {
-  'NAS/US30': { multiplier: 1, label: 'NAS / US30', unit: 'index points', color: '#6B9FFF', icon: '📊' },
-  Gold: { multiplier: 100, label: 'Gold (XAUUSD)', unit: 'pips', color: '#E6C86A', icon: '🥇' },
-  Currency: { multiplier: 1, label: 'Currency Pairs', unit: 'pips', color: '#4CB880', icon: '💱', isCurrency: true },
+  'NAS/US30': { multiplier: 1, label: 'NAS / US30', unit: 'index points', color: '#6B9FFF', icon: 'IDX' },
+  Gold: { multiplier: 100, label: 'Gold (XAUUSD)', unit: 'pips', color: '#E6C86A', icon: 'XAU' },
+  Currency: { multiplier: 1, label: 'Currency Pairs', unit: 'pips', color: '#4CB880', icon: 'FX', isCurrency: true },
 };
 
 const fmt = (n) => (isFinite(n) ? n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00');
@@ -83,11 +83,11 @@ export default function RiskCalculator() {
   };
 
   const warnings = [];
-  if (!isFunded && calc.riskPct > 10) warnings.push({ c: RED, t: '⚠️ You are risking more than 10% of your HFM account. Reduce your lot size.' });
-  else if (!isFunded && calc.riskPct > 5) warnings.push({ c: GOLD, t: '⚡ Risk is above 5% — be cautious with your HFM account.' });
-  if (isFunded && calc.riskPct > 1.5) warnings.push({ c: RED, t: '🚨 DANGER — Over 1.5% risk on a funded account. You risk breaching your drawdown rules.' });
-  else if (isFunded && calc.riskPct > 1) warnings.push({ c: GOLD, t: '⚡ Approaching 1.5% funded account risk limit. Consider reducing size.' });
-  if (calc.rr !== null && calc.rr > 0 && calc.rr < 1.5) warnings.push({ c: GOLD, t: '⚡ Risk:Reward is below 1:1.5. Look for a better setup.' });
+  if (!isFunded && calc.riskPct > 10) warnings.push({ c: RED, t: 'You are risking more than 10% of your HFM account. Reduce your lot size.' });
+  else if (!isFunded && calc.riskPct > 5) warnings.push({ c: GOLD, t: 'Risk is above 5% — be cautious with your HFM account.' });
+  if (isFunded && calc.riskPct > 1.5) warnings.push({ c: RED, t: 'DANGER — Over 1.5% risk on a funded account. You risk breaching your drawdown rules.' });
+  else if (isFunded && calc.riskPct > 1) warnings.push({ c: GOLD, t: 'Approaching 1.5% funded account risk limit. Consider reducing size.' });
+  if (calc.rr !== null && calc.rr > 0 && calc.rr < 1.5) warnings.push({ c: GOLD, t: 'Risk:Reward is below 1:1.5. Look for a better setup.' });
 
   // ── shared style atoms ──
   const cardBase = { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 16, boxShadow: SHADOW };
@@ -127,7 +127,7 @@ export default function RiskCalculator() {
       <div style={{ ...cardBase, padding: 22, marginBottom: 18 }}>
         {/* HFM account badge */}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: '#6B9FFF14', border: `1px solid #6B9FFF44`, marginBottom: 20 }}>
-          <span style={{ fontSize: 16 }}>🏦</span>
+          <span className="calc-code">HFM</span>
           <span style={{ fontWeight: 600, color: INK, fontSize: 14 }}>HFM Account</span>
           <span style={{ fontSize: 12, color: INK_SOFT }}>· Max 10% risk</span>
         </div>
@@ -162,7 +162,7 @@ export default function RiskCalculator() {
               <label style={{ ...labelSt, display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
                 <span style={{ textTransform: 'uppercase', letterSpacing: '.4px' }}>USD / ZAR Rate</span>
                 <span style={{ fontWeight: 500, color: rateStatus === 'ok' ? GREEN : rateStatus === 'loading' ? INK_FAINT : RED }}>
-                  {rateStatus === 'loading' ? '⟳ Fetching live rate…' : rateStatus === 'ok' ? '✓ Live rate' : '⚠ Manual entry'}
+                  {rateStatus === 'loading' ? 'Fetching live rate…' : rateStatus === 'ok' ? 'Live rate' : 'Manual entry'}
                 </span>
               </label>
               <input {...inputProps('rate')} type="number" value={rate} onChange={(e) => setRate(e.target.value)} />
@@ -176,7 +176,7 @@ export default function RiskCalculator() {
         {/* Risk */}
         <div style={{ ...cardBase, padding: 22, borderTop: `3px solid ${RED}`, background: 'linear-gradient(180deg, ' + RED + '06, #fff 40%)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: RED, marginBottom: 16, fontSize: 15 }}>
-            <span style={{ width: 26, height: 26, borderRadius: 8, background: RED + '18', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>🛑</span>
+            <span className="calc-mark" style={{ background: RED + '18' }}>SL</span>
             Risk / Stop Loss
           </div>
           <label style={labelSt}>Risk ({inst.unit})</label>
@@ -197,7 +197,7 @@ export default function RiskCalculator() {
         {/* Profit */}
         <div style={{ ...cardBase, padding: 22, borderTop: `3px solid ${GREEN}`, background: 'linear-gradient(180deg, ' + GREEN + '06, #fff 40%)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: GREEN_DK, marginBottom: 16, fontSize: 15 }}>
-            <span style={{ width: 26, height: 26, borderRadius: 8, background: GREEN + '18', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>✅</span>
+            <span className="calc-mark" style={{ background: GREEN + '18' }}>TP</span>
             Profit / Take Profit
           </div>
           <label style={labelSt}>Profit ({inst.unit})</label>

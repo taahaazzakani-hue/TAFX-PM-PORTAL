@@ -35,7 +35,7 @@ export default function Leaderboard({ user }) {
 
   if (!board) return <div className="spinner" />;
 
-  const medal = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
+  const medal = (i) => `${i + 1}`;
   const me = board.find((r) => r.user_id === user.id);
   const myRank = me ? board.findIndex((r) => r.user_id === user.id) + 1 : null;
 
@@ -119,7 +119,7 @@ export default function Leaderboard({ user }) {
                     <td style={{ fontWeight: 700, color: 'var(--gold)' }}>{r.effort}</td>
                     <td style={{ fontWeight: 600 }}>{r.volume}</td>
                     <td>{r.activeDays}</td>
-                    <td>{r.streak > 0 ? `🔥 ${r.streak}` : '—'}</td>
+                    <td>{r.streak > 0 ? r.streak : '—'}</td>
                     <td>{(r.avgMarks ?? 0).toFixed(1)}</td>
                     <td>{r.winRate}%</td>
                   </tr>
