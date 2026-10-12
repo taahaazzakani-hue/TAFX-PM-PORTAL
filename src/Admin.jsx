@@ -599,7 +599,7 @@ function VideoModal({ admin, data, sections, onSave, onClose }) {
       <label>Lesson type</label>
       <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
         {[['video', 'Video lesson'], ['pdf', 'PDF lesson']].map(([k, lbl]) => (
-          <button key={k} type="button" onClick={() => setType(k)} style={{
+          <button key={k} className={lType === k ? 'theme-filter--selected' : undefined} type="button" onClick={() => setType(k)} style={{
             cursor: 'pointer', padding: '8px 18px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
             background: lType === k ? 'var(--ink)' : 'transparent',
             color: lType === k ? '#fff' : 'var(--ink-soft)',
@@ -940,7 +940,7 @@ function StudentJournalReview({ admin, student, onBack }) {
           {[['all', 'All'], ['live', 'Live'], ['backtest', 'Backtest']].map(([k, lbl]) => {
             const n = k === 'all' ? levelScoped.length : levelScoped.filter((e) => (e.trade_type || 'live') === k).length;
             return (
-              <button key={k} onClick={() => setTypeFilter(k)} style={{
+              <button key={k} className={typeFilter === k ? 'theme-filter--selected' : undefined} onClick={() => setTypeFilter(k)} style={{
                 cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
                 background: typeFilter === k ? 'var(--ink)' : 'transparent',
                 color: typeFilter === k ? '#fff' : 'var(--ink-soft)', transition: 'background .15s',
@@ -1039,7 +1039,7 @@ function AdminLeaderboard({ admin }) {
       <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Leaderboard</span>
       <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
         {VIEWS.map(([k, lbl]) => (
-          <button key={k} onClick={() => setView(k)} style={{
+          <button key={k} className={view === k ? 'theme-filter--selected' : undefined} onClick={() => setView(k)} style={{
             cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
             background: view === k ? 'var(--ink)' : 'transparent',
             color: view === k ? '#fff' : 'var(--ink-soft)', transition: 'background .15s',
@@ -1254,7 +1254,7 @@ function StudentProfile({ admin, studentId, onBack }) {
         <img src={s.avatar_url || TEACH2} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: s.avatar_url ? 0.25 : 0.3 }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(31,95,191,.92), rgba(255,255,255,.75))' }} />
         <div style={{ position: 'relative', padding: '26px 28px', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-          <div style={{ width: 76, height: 76, borderRadius: '50%', overflow: 'hidden', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', border: '3px solid #fff', boxShadow: '0 4px 14px rgba(0,0,0,.15)' }}>
+          <div className="theme-light-surface" style={{ width: 76, height: 76, borderRadius: '50%', overflow: 'hidden', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', border: '3px solid #fff', boxShadow: '0 4px 14px rgba(0,0,0,.15)' }}>
             {s.avatar_url ? <img src={s.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--gold)' }}>{initials}</span>}
           </div>
           <div style={{ flex: 1, minWidth: 200 }}>
@@ -1348,7 +1348,7 @@ function StudentProfile({ admin, studentId, onBack }) {
 
 function Tile({ icon, v, l, tint, small }) {
   return (
-    <div style={{ background: '#fff', border: `1px solid var(--line)`, borderRadius: 14, padding: 16, boxShadow: 'var(--shadow)', position: 'relative', overflow: 'hidden' }}>
+    <div className="theme-light-surface" style={{ background: '#fff', border: `1px solid var(--line)`, borderRadius: 14, padding: 16, boxShadow: 'var(--shadow)', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: 0, left: 0, width: 4, height: '100%', background: tint }} />
       <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
       <div style={{ fontFamily: 'var(--serif)', fontSize: small ? 18 : 26, fontWeight: 700, color: tint, lineHeight: 1.1 }}>{v}</div>
@@ -1395,12 +1395,12 @@ function AuditLog({ admin }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Activity by</span>
         <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3, flexWrap: 'wrap' }}>
-          <button onClick={() => setWho('')} style={{
+          <button className={who === '' ? 'theme-filter--selected' : undefined} onClick={() => setWho('')} style={{
             cursor: 'pointer', padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
             background: who === '' ? 'var(--ink)' : 'transparent', color: who === '' ? '#fff' : 'var(--ink-soft)',
           }}>Everyone</button>
           {(data.admins || []).map((a) => (
-            <button key={a.id} onClick={() => setWho(a.id)} style={{
+            <button key={a.id} className={who === a.id ? 'theme-filter--selected' : undefined} onClick={() => setWho(a.id)} style={{
               cursor: 'pointer', padding: '8px 16px', fontSize: 13, fontWeight: 700, borderRadius: 999, border: 'none',
               background: who === a.id ? 'var(--ink)' : 'transparent', color: who === a.id ? '#fff' : 'var(--ink-soft)',
             }}>{a.name}</button>

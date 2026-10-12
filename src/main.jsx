@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import App from './App.jsx';
+import './reference-theme.css';
 
 const link = document.createElement('link');
 link.rel = 'stylesheet';

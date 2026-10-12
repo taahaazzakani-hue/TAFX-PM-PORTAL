@@ -124,7 +124,7 @@ export default function RiskCalculator() {
       </div>
 
       {/* ── Setup panel: account + instrument + size/rate ── */}
-      <div style={{ ...cardBase, padding: 22, marginBottom: 18 }}>
+      <div className="theme-light-surface" style={{ ...cardBase, padding: 22, marginBottom: 18 }}>
         {/* HFM account badge */}
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: '#6B9FFF14', border: `1px solid #6B9FFF44`, marginBottom: 20 }}>
           <span className="calc-code">HFM</span>
@@ -138,7 +138,7 @@ export default function RiskCalculator() {
           {Object.entries(INSTRUMENTS).map(([k, v]) => {
             const on = instrument === k;
             return (
-              <button key={k} onClick={() => setInstrument(k)} style={{
+              <button key={k} className={!on ? 'theme-light-surface' : undefined} onClick={() => setInstrument(k)} style={{
                 cursor: 'pointer', padding: '16px 10px', borderRadius: 13, textAlign: 'center',
                 border: `1.5px solid ${on ? v.color : LINE}`, background: on ? v.color + '16' : '#fff',
                 boxShadow: on ? `0 4px 16px ${v.color}33` : 'none', transition: 'all .15s',

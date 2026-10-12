@@ -115,7 +115,7 @@ export default function Journal({ user, confluences, readOnly = false, preloaded
             <span style={{ fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--ink-faint)', fontWeight: 700 }}>Showing</span>
             <div style={{ display: 'inline-flex', background: 'var(--panel-2)', border: '1px solid var(--line)', borderRadius: 999, padding: 3 }}>
               {TYPE_TABS.map(([k, lbl]) => (
-                <button key={k} onClick={() => setTypeFilter(k)} style={{
+                <button key={k} className={typeFilter === k ? 'theme-filter--selected' : undefined} onClick={() => setTypeFilter(k)} style={{
                   cursor: 'pointer', padding: '8px 20px', fontSize: 13.5, fontWeight: 700, borderRadius: 999, border: 'none',
                   background: typeFilter === k ? 'var(--ink)' : 'transparent',
                   color: typeFilter === k ? '#fff' : 'var(--ink-soft)',

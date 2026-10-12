@@ -40,3 +40,18 @@
   .forex-hero__desc { font-size: 14px; }
   .forex-hero__shade { background: linear-gradient(180deg, rgba(11,22,38,.25) 0%, rgba(11,22,38,.78) 100%); }
 }
+/* The same full-width video background is used outside and inside the portal. */
+.forex-hero__grid { z-index: 1; pointer-events: none; }
+.forex-hero__video { object-fit: cover; object-position: center; filter: none; }
+.forex-hero__shade { z-index: 2; }
+.forex-hero__body { max-width: 720px; }
+.forex-hero__title { font-weight: 600; letter-spacing: -.035em; line-height: 1.04; text-shadow: 0 2px 30px rgba(0,0,0,.7); }
+.forex-hero__desc { color: rgba(242,245,250,.82); max-width: 520px; }
+.forex-hero__label { color: rgba(163,173,189,.85); letter-spacing: .08em; text-transform: uppercase; font-size: 10px; }
+@media (max-width: 640px) { .forex-hero__video { object-position: center; } }
+@media (min-width: 981px) {
+  .forex-hero { aspect-ratio: 16 / 7; }
+  .forex-hero--auth { max-height: 600px; }
+  .forex-hero__video { object-position: center; }
+}
+

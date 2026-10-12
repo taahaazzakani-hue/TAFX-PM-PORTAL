@@ -372,7 +372,7 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
                 <div className="body">
                   <div className="ct">{c.title}</div>
                   <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
-                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span className={pct === 100 ? 'course-progress--complete' : undefined} style={{ width: `${pct}%` }} /></div></div>
                   <div className="foot">
                     <span className="pct">{pct}% complete</span>
                     <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
@@ -419,9 +419,9 @@ function Dashboard({ user, courses, previewCourses = [], content, courseProgress
         <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
       </ForexHero>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
+      <div className="course-search" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
         <IcSearch />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
+        <input className="course-search__input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
           style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }} />
       </div>
 
@@ -453,7 +453,7 @@ function Dashboard({ user, courses, previewCourses = [], content, courseProgress
                 <div className="body">
                   <div className="ct">{c.title}</div>
                   <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
-                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span className={pct === 100 ? 'course-progress--complete' : undefined} style={{ width: `${pct}%` }} /></div></div>
                   <div className="foot">
                     <span className="pct">{pct}% complete</span>
                     <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
