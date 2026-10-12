@@ -13,6 +13,8 @@ import RiskCalculator from './RiskCalculator.jsx';
 import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
 import { StripeCheckoutModal, STRIPE_PLANS } from './StripeCheckout.jsx';
+import { WorkspaceLoading } from './PortalMotion.jsx';
+import ForexHero from './ForexHero.jsx';
 
 /* Levels that show as a locked preview to students who don't own them, and
    which Stripe plan each one checks out against. Prices and labels come from
@@ -202,7 +204,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       .then(setGate).catch(() => setGate(null));
   }, [gateLevel]);
 
-  if (!content) return <div className="center-load"><div className="spinner" /></div>;
+  if (!content) return <WorkspaceLoading />;
 
   const myLevels = user.levels || [];
   const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
@@ -237,9 +239,9 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <div className={`overlay-menu ${navOpen ? 'show' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidebar ${navOpen ? 'open' : ''}`}>
         <div className="sb-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src={LOGO} alt="TA" style={{ width: 34 }} />
-            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-.2px' }}>TA · Portal</div>
+          <div className="sb-brand">
+            <img src={LOGO} alt="TA" />
+            <div><div className="t">TaahaFX</div><div className="s">Portal</div></div>
           </div>
         </div>
         <div className="sb-body">
@@ -271,7 +273,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
                   <div className="row" style={{ opacity: .62 }}
                     onClick={() => { setView('pm'); setActiveVideo(null); setNavOpen(false); }}>
                     <span className={`stage-dot dot-${c.level}`} />{c.title}
-                    <span className="prog-mini">🔒</span>
+                    <span className="prog-mini">Locked</span>
                   </div>
                 </div>
               ))}
@@ -351,11 +353,9 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
   const lessonsIn = (cid) => (content.videos || []).filter((v) => v.course_id === cid).length;
   return (
     <div>
-      <div className="hero-card">
-        <div className="eyebrow">TaahaFX</div>
-        <h1>Private Mentorship</h1>
+      <ForexHero eyebrow="TaahaFX" heading={<>Private Mentorship</>}>
         <div className="meta">Your guided path through the stages — {courses.length} level{courses.length !== 1 ? 's' : ''} unlocked · mentored by Taaha Azzakani</div>
-      </div>
+      </ForexHero>
       {courses.length === 0 && previewCourses.length === 0 ? (
         <div className="empty"><div className="big serif">No stages yet</div><div>Your mentor hasn't assigned a mentorship stage to your account yet. Your levels will appear here once they do.</div></div>
       ) : (
@@ -372,7 +372,7 @@ function PMHome({ user, courses, previewCourses = [], content, courseProgress, o
                 <div className="body">
                   <div className="ct">{c.title}</div>
                   <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
-                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span className={pct === 100 ? 'course-progress--complete' : undefined} style={{ width: `${pct}%` }} /></div></div>
                   <div className="foot">
                     <span className="pct">{pct}% complete</span>
                     <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
@@ -415,23 +415,21 @@ function Dashboard({ user, courses, previewCourses = [], content, courseProgress
 
   return (
     <div>
-      <div className="hero-card">
-        <div className="eyebrow">TaahaFX — Private Mentorship</div>
-        <h1>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</h1>
+      <ForexHero eyebrow="TaahaFX — Private Mentorship" heading={<>Everything you need to trade forex{firstName ? `, ${firstName}` : ''}.</>}>
         <div className="meta">{courses.length} course{courses.length !== 1 ? 's' : ''} unlocked · {totalLessons} lessons · mentored by Taaha Azzakani</div>
-      </div>
+      </ForexHero>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
+      <div className="course-search" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,.85)', border: '1px solid var(--line)', borderRadius: 999, padding: '11px 18px', marginBottom: 18, boxShadow: 'var(--shadow)', color: 'var(--ink-faint)' }}>
         <IcSearch />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
+        <input className="course-search__input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…"
           style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }} />
       </div>
 
       {billing?.active && (
         <div className="strip-banner">
           <span className="tag">Private Mentorship</span>
-          <span className="item">💎 Exclusive curriculum</span>
-          <span className="item">🎯 1-on-1 mentor feedback</span>
+          <span className="item">Exclusive curriculum</span>
+          <span className="item">1-on-1 mentor feedback</span>
           <span className="sp" />
           <span className="item" style={{ fontWeight: 600, color: billing.status === 'overdue' ? 'var(--red)' : 'var(--ink)' }}>
             {billing.status === 'overdue' ? 'Payment overdue' : dueStr ? `Next payment · ${dueStr}` : `R${billing.fee}/month`}
@@ -455,7 +453,7 @@ function Dashboard({ user, courses, previewCourses = [], content, courseProgress
                 <div className="body">
                   <div className="ct">{c.title}</div>
                   <div className="cm">{n} lesson{n !== 1 ? 's' : ''}</div>
-                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span style={{ width: `${pct}%` }} /></div></div>
+                  <div className="cp"><div className="progress-bar" style={{ marginTop: 0 }}><span className={pct === 100 ? 'course-progress--complete' : undefined} style={{ width: `${pct}%` }} /></div></div>
                   <div className="foot">
                     <span className="pct">{pct}% complete</span>
                     <span className="start">{pct > 0 ? 'Continue' : 'Start'} →</span>
@@ -501,7 +499,7 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
       <>
         <div className="lesson" style={{ paddingLeft: 18 + depth * 22 }} onClick={() => onOpen(v)}>
           <div className={`tick ${watched.has(v.id) ? 'done' : ''}`}>✓</div>
-          <span className="l-title">{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? '📄 ' : ''}{v.title}</span>
+          <span className="l-title">{depth > 0 ? '↳ ' : ''}{(v.lesson_type || 'video') === 'pdf' ? 'PDF · ' : ''}{v.title}</span>
           <span className="l-meta">{(v.lesson_type || 'video') !== 'pdf' && v.pdf_url && <span className="pill pdf">PDF</span>}{subs.length > 0 && <span className="pill">{subs.length} part{subs.length > 1 ? 's' : ''}</span>}<span className="pill">{(v.lesson_type || 'video') === 'pdf' ? 'Read' : 'Watch'}</span></span>
         </div>
         {subs.map((sub) => <LessonRow key={sub.id} v={sub} depth={depth + 1} />)}
@@ -576,14 +574,14 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
     return (
       <div className="section-group" key={s.id} style={nested ? { marginLeft: 18 } : undefined}>
         <div className={`section-head ${isOpen ? 'open' : ''}`} onClick={() => toggle(s.id)}>
-          <span className="chev">▶</span><span className="st">{nested ? '🗂️ ' : ''}{s.title}</span><span className="count">{doneCount}/{allVids.length} done</span>
+          <span className="chev">▶</span><span className="st">{nested ? 'Folder · ' : ''}{s.title}</span><span className="count">{doneCount}/{allVids.length} done</span>
         </div>
         {isOpen && (
           <div className="section-body">
             {vids.map((v) => <LessonRow key={v.id} v={v} />)}
             {res.map((r) => (
               <a className="lesson" key={r.id} href={r.pdf_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                <div className="tick" style={{ borderColor: 'transparent' }}>📄</div>
+                <div className="tick" style={{ borderColor: 'transparent' }}>PDF</div>
                 <span className="l-title">{r.title}</span><span className="l-meta"><span className="pill pdf">Notes</span></span>
               </a>
             ))}
@@ -601,7 +599,7 @@ function CourseView({ course, sections, videos, resources, watched, progress, on
     return (
       <div className="section-group" key={f.id}>
         <div className={`section-head ${isOpen ? 'open' : ''}`} onClick={() => toggle(f.id)}>
-          <span className="chev">▶</span><span className="st">📁 {f.title}</span><span className="count">{subs.length} folder{subs.length !== 1 ? 's' : ''}</span>
+          <span className="chev">▶</span><span className="st">Folder · {f.title}</span><span className="count">{subs.length} folder{subs.length !== 1 ? 's' : ''}</span>
         </div>
         {isOpen && (
           <div className="section-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
@@ -678,12 +676,12 @@ function VideoView({ video, resources, done, onBack, onToggle }) {
       {video.description && <p className="player-desc">{video.description}</p>}
       {!isPdfLesson && video.pdf_url && (
         <a className="resource-card" href={video.pdf_url} target="_blank" rel="noreferrer">
-          <div className="ico">📄</div><div><div className="rn">{video.pdf_name || 'Lesson notes'}</div><div className="rs">PDF · tap to open</div></div>
+          <div className="ico">PDF</div><div><div className="rn">{video.pdf_name || 'Lesson notes'}</div><div className="rs">PDF · tap to open</div></div>
         </a>
       )}
       {resources.map((r) => (
         <a className="resource-card" key={r.id} href={r.pdf_url} target="_blank" rel="noreferrer">
-          <div className="ico">📄</div><div><div className="rn">{r.title}</div><div className="rs">Section notes · tap to open</div></div>
+          <div className="ico">PDF</div><div><div className="rn">{r.title}</div><div className="rs">Section notes · tap to open</div></div>
         </a>
       ))}
     </div>

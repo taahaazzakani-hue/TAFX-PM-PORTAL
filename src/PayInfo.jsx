@@ -12,7 +12,7 @@ function Row({ label, value, copyable }) {
       <div style={{ fontSize: 12, color: 'var(--ink-faint)', width: 120, flex: 'none' }}>{label}</div>
       <div style={{ fontWeight: 600, fontSize: 14, flex: 1, wordBreak: 'break-word' }}>{value}</div>
       {copyable && (
-        <button className="mini-btn" style={{ margin: 0, flex: 'none' }} onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+        <button className="mini-btn" style={{ margin: 0, flex: 'none' }} onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
       )}
     </div>
   );

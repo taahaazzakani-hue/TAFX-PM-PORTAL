@@ -1,0 +1,14 @@
+.portal-motion { position: relative; width: 210px; aspect-ratio: 3 / 2; pointer-events: none; }
+.portal-motion__canvas, .portal-motion__fallback { position: absolute; inset: 0; width: 100%; height: 100%; }
+.portal-motion__canvas svg { display: block; }
+.portal-motion--loader { width: 64px; aspect-ratio: 1; }
+.auth-visual > .auth-signal { position: absolute; right: 48px; top: 12%; z-index: 2; opacity: .8; }
+.hero-card > .hero-signal { position: absolute; right: 30px; top: 24px; width: 130px; opacity: .45; }
+.portal-loading { flex-direction: column; gap: 12px; }
+.portal-loading > span { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: .04em; }
+@media (max-width: 900px) {
+  .auth-visual > .auth-signal { width: 90px; right: 22px; top: 58px; }
+}
+@media (max-width: 640px) {
+  .hero-card > .hero-signal { width: 70px; top: 10px; right: 14px; opacity: .25; }
+}
