@@ -279,6 +279,11 @@ function RequestModal({ user, onClose, onDone, fixedDur, heading, blurb }) {
   }
 
   const hours = slotInfo?.hours;
+  // If the chosen day carries a one-off clinic block, say so under the slots.
+  const blockNote = (() => {
+    const metas = Object.values(slotInfo?.slot_meta || {}).filter((m) => m && m.block_id);
+    return metas.length ? { label: metas[0].label || 'Clinic', dur: metas[0].dur } : null;
+  })();
   const maxDate = hours
     ? toSastInput(Date.now() + (hours.max_days_ahead || 60) * 86400000).slice(0, 10)
     : undefined;
@@ -288,7 +293,9 @@ function RequestModal({ user, onClose, onDone, fixedDur, heading, blurb }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="serif">{heading || 'Book a 1v1 session'}</h3>
         <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', marginBottom: 14 }}>
-          {blurb || 'Sessions run 08:00–12:00 and 16:00–19:00, South African time.'}
+          {blurb || (hours?.windows?.length
+            ? `Sessions run ${hours.windows.map((w) => `${w.start}–${w.end}`).join(' and ')}, South African time.`
+            : 'All times shown are South African (SAST).')}
         </p>
 
         {fixedDur ? (
@@ -324,15 +331,33 @@ function RequestModal({ user, onClose, onDone, fixedDur, heading, blurb }) {
               </div>
             ) : (
               <div className="slot-grid">
-                {(slotInfo?.slots || []).map((ms) => (
-                  <button key={ms} type="button"
-                    className={`slot ${slotMs === ms ? 'sel' : ''}`}
-                    onClick={() => setSlotMs(ms)}>
-                    {new Date(ms).toLocaleTimeString('en-ZA', {
-                      timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false,
-                    })}
-                  </button>
-                ))}
+                {(slotInfo?.slots || []).map((ms) => {
+                  // A clinic slot runs for its own fixed length, not the length
+                  // chosen above, so label it rather than let it look like an
+                  // ordinary session.
+                  const meta = slotInfo?.slot_meta?.[String(ms)];
+                  const short = meta && meta.block_id;
+                  return (
+                    <button key={ms} type="button"
+                      className={`slot ${slotMs === ms ? 'sel' : ''}`}
+                      onClick={() => setSlotMs(ms)}>
+                      {new Date(ms).toLocaleTimeString('en-ZA', {
+                        timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false,
+                      })}
+                      {short && (
+                        <span style={{ display: 'block', fontSize: 10, opacity: .7, marginTop: 1 }}>
+                          {meta.dur} min
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {blockNote && (
+              <div style={{ fontSize: 12, color: 'var(--gold-soft)', marginTop: 8 }}>
+                <b>{blockNote.label}</b> — {blockNote.dur}-minute slots, Private Mentorship only.
+                These don't use up your monthly 1v1, and you can take one slot.
               </div>
             )}
           </div>
