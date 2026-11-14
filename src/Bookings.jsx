@@ -102,6 +102,42 @@ export function FileView({ files, title }) {
 
 /* ---------- student view ---------- */
 
+/* A one-off clinic announced to the students entitled to it. Everything shown
+   here comes from pm_settings.booking_hours.blocks, so the dates and times can
+   change without a deploy and can never drift from the slots actually offered. */
+function ClinicBanner({ block, onBook }) {
+  const dayLabel = (d) =>
+    new Date(`${d}T12:00:00+02:00`).toLocaleDateString('en-ZA',
+      { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short' });
+  const days = (block.dates || []).map(dayLabel).join('  ·  ');
+  const times = (block.windows || []).map((w) => `${w.start}–${w.end}`).join(', ');
+  const taken = (block.booked || 0) >= (block.per_student || 1);
+
+  return (
+    <div className="card" style={{
+      marginTop: 12, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+      borderColor: 'var(--gold)', background: 'var(--panel-2)',
+    }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div className="brk-eyebrow" style={{ color: 'var(--gold-soft)' }}>Private Mentorship</div>
+        <h3 style={{ margin: '6px 0 4px' }}>{block.label}</h3>
+        <p style={{ color: 'var(--ink-soft)', fontSize: 13, margin: 0 }}>
+          <b>{days}</b> · {times} SAST · {block.slot_min}-minute slots.
+          {' '}A quick check-in on where you are. This is on top of your monthly 1v1 —
+          it doesn't use it up. One slot each.
+        </p>
+      </div>
+      {taken ? (
+        <span className="status-tag s-approved" style={{ whiteSpace: 'nowrap' }}>Your slot is booked</span>
+      ) : (
+        <button className="btn" style={{ width: 'auto', padding: '10px 18px' }} onClick={onBook}>
+          Book your slot
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function Bookings({ user, onLeave }) {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(false);
@@ -147,6 +183,10 @@ export default function Bookings({ user, onLeave }) {
       </div>
 
       {err && <div className="notice err" style={{ marginTop: 12 }}>{err}</div>}
+
+      {(data.blocks || []).map((bk) => (
+        <ClinicBanner key={bk.id} block={bk} onBook={() => { setErr(''); setOpen(true); }} />
+      ))}
 
       {reviewed.length > 0 && (
         <>
