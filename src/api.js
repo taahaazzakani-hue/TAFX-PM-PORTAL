@@ -8,6 +8,7 @@ const BOOKINGS_API = `${SUPABASE_URL}/functions/v1/pm-bookings`;
 const SETTINGS_API = `${SUPABASE_URL}/functions/v1/pm-settings`;
 const INTEREST_API = `${SUPABASE_URL}/functions/v1/pm-interest`;
 const GATES_API = `${SUPABASE_URL}/functions/v1/pm-gates`;
+const SUBS_API = `${SUPABASE_URL}/functions/v1/pm-subs`;
 
 // NOTE: Online payment gateways (PayFast/Paystack) were removed. Subscriptions
 // are paid manually by EFT to the mentor; see payinfo.js for the details shown
@@ -36,6 +37,12 @@ export async function callInterest(action, body = {}) {
 // Content gating — which sections a student has unlocked.
 export async function callGates(action, body = {}) {
   return post(GATES_API, action, body);
+}
+
+// Stripe subscriptions for one student — owner-only, used by the admin
+// student profile to see and cancel a live membership.
+export async function callSubs(action, body = {}) {
+  return post(SUBS_API, action, body);
 }
 
 async function post(url, action, body) {

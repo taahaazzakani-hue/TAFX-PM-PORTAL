@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { call, callBookings, callSettings, callInterest, callGates, uploadFile } from './api.js';
+import { call, callBookings, callSettings, callInterest, callGates, uploadFile, callSubs } from './api.js';
 import { LOGO, TEACH2 } from './assets.js';
 import Profile from './Profile.jsx';
 import SearchBox from './SearchBox.jsx';
@@ -1224,6 +1224,97 @@ function BillingModal({ admin, row, plan, onClose, onSaved }) {
   );
 }
 
+/* ---------- STRIPE SUBSCRIPTIONS ON A STUDENT ---------- */
+/* Live recurring memberships pulled straight from Stripe, one row per plan,
+   each cancellable on its own. A student on both Private Mentorship and 1-to-1
+   gets two rows and can be taken off one without touching the other.
+   Owner-only: the server refuses any scoped admin, so for Josh this simply
+   renders nothing rather than a button that would fail. */
+function StripeSubs({ admin, student }) {
+  const [subs, setSubs] = useState(null);   // null = loading, [] = none, false = unavailable
+  const [ask, setAsk] = useState(null);     // the subscription being cancelled
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+
+  const load = () => callSubs('subs_list', { admin_id: admin.id, user_id: student.id })
+    .then((d) => setSubs(d.subscriptions || []))
+    .catch(() => setSubs(false));
+  useEffect(() => { load(); }, [student.id]);
+
+  async function cancel(mode) {
+    setBusy(true);
+    try {
+      const d = await callSubs('subs_cancel', {
+        admin_id: admin.id, user_id: student.id, subscription_id: ask.id, mode,
+      });
+      setSubs(d.subscriptions || []);
+      setNote(mode === 'now'
+        ? `${ask.label} cancelled. ${d.access_revoked ? 'Their access to it has been removed.' : ''}`
+        : `${ask.label} will end on ${new Date(d.period_end).toLocaleDateString()}. They keep access until then.`
+          + (d.needs_manual_revoke ? ' This one is on a non-standard price, so remove the level yourself on the day.' : ''));
+      setAsk(null);
+    } catch (e) {
+      setNote(e.message);
+    } finally { setBusy(false); }
+  }
+
+  if (subs === false || (Array.isArray(subs) && subs.length === 0)) {
+    return note ? <div className="hint" style={{ marginTop: 10 }}>{note}</div> : null;
+  }
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+      <div className="hint" style={{ marginBottom: 8 }}>Stripe subscriptions</div>
+
+      {subs === null ? <div className="hint">Checking Stripe…</div> : subs.map((sub) => (
+        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ flex: 1, minWidth: 150 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{sub.label}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>
+              {sub.currency === 'ZAR' ? 'R' : `${sub.currency} `}{sub.amount}/{sub.interval || 'month'}
+              {sub.status !== 'active' && ` · ${sub.status.replace('_', ' ')}`}
+              {sub.cancel_at_period_end && ` · ends ${new Date(sub.period_end).toLocaleDateString()}`}
+            </div>
+          </div>
+          {sub.cancel_at_period_end
+            ? <span className="status-tag s-pending">Ending</span>
+            : <button className="mini-btn bad" onClick={() => { setNote(''); setAsk(sub); }}>Cancel</button>}
+        </div>
+      ))}
+
+      {note && <div className="hint" style={{ marginTop: 8 }}>{note}</div>}
+
+      {ask && (
+        <div className="modal-back" onClick={() => !busy && setAsk(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="serif">Cancel {ask.label}?</h3>
+            <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, lineHeight: 1.7 }}>
+              {student.name} is paying {ask.currency === 'ZAR' ? 'R' : `${ask.currency} `}{ask.amount} a {ask.interval || 'month'} for this.
+              They have paid up to <b>{new Date(ask.period_end).toLocaleDateString()}</b>.
+              {ask.plan ? '' : ' This one is not Private Mentorship or 1-to-1, so no portal access changes.'}
+            </p>
+            <div className="modal-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <button className="btn ghost" onClick={() => setAsk(null)} disabled={busy}>Keep it</button>
+              <button className="btn" style={{ width: 'auto', padding: '10px 16px' }}
+                onClick={() => cancel('period_end')} disabled={busy}>
+                {busy ? '…' : 'Stop at period end'}
+              </button>
+              <button className="btn" style={{ width: 'auto', padding: '10px 16px', background: 'var(--red)', borderColor: 'var(--red)' }}
+                onClick={() => cancel('now')} disabled={busy}>
+                {busy ? '…' : 'End now'}
+              </button>
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', marginTop: 10, marginBottom: 0 }}>
+              <b>Stop at period end</b> charges them nothing further and leaves access running to the paid-up date.
+              <b> End now</b> stops the subscription and removes their access to that plan immediately. Neither refunds anything.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------- FULL STUDENT PROFILE OVERVIEW ---------- */
 function StudentProfile({ admin, studentId, onBack }) {
   const [data, setData] = useState(null);
@@ -1304,6 +1395,9 @@ function StudentProfile({ admin, studentId, onBack }) {
           <Row k={`On R${b.fee ?? 800} plan`} v={b.active ? 'Yes' : 'No'} />
           <Row k="Paid until" v={fmtDay(b.paid_until)} />
           <Row k="Status" v={billTag.t} color={billTag.c} />
+
+          <StripeSubs admin={admin} student={s} />
+
           {data.payments.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div className="hint" style={{ marginBottom: 6 }}>Payment history</div>
