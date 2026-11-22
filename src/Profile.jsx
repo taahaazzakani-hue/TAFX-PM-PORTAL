@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { call, uploadImage, saveSession } from './api.js';
+import React, { useState, useEffect } from 'react';
+import { call, uploadImage, saveSession, callSubs } from './api.js';
 import PasswordField from './PasswordField.jsx';
 
 export default function Profile({ user, onUpdated, initialNotice }) {
@@ -44,8 +44,90 @@ export default function Profile({ user, onUpdated, initialNotice }) {
         <button className="btn" style={{ width: 'auto', padding: '11px 24px' }} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
       </div>
 
+      <MyMembership user={user} />
       <DiscordLink user={user} onUpdated={onUpdated} initialNotice={initialNotice} />
       <ChangePassword user={user} />
+    </div>
+  );
+}
+
+/* ---------- THE STUDENT'S OWN MEMBERSHIP ---------- */
+/* Read straight from Stripe, so it shows what is actually being charged
+   rather than what the portal believes. A student can end a membership
+   themselves; it always runs to the end of the period they have paid for, so
+   nobody loses time they bought and no refund question arises. */
+function MyMembership({ user }) {
+  const [subs, setSubs] = useState(null);   // null = loading, false = unreachable
+  const [ask, setAsk] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const load = () => callSubs('my_subs_list', { user_id: user.id, session_token: user.session_token })
+    .then((d) => setSubs(d.subscriptions || []))
+    .catch(() => setSubs(false));
+  useEffect(() => { load(); }, [user.id]);
+
+  async function confirmCancel() {
+    setBusy(true);
+    try {
+      const d = await callSubs('my_subs_cancel', {
+        user_id: user.id, session_token: user.session_token, subscription_id: ask.id,
+      });
+      setSubs(d.subscriptions || []);
+      setMsg({ t: 'ok', m: `Your ${ask.label} has been cancelled. You keep full access until ${new Date(d.period_end).toLocaleDateString()}, and you won't be charged again.` });
+      setAsk(null);
+    } catch (e) {
+      setMsg({ t: 'err', m: e.message });
+    } finally { setBusy(false); }
+  }
+
+  // Nothing to show someone who pays by EFT or isn't on a plan.
+  if (subs === false || (Array.isArray(subs) && subs.length === 0)) return null;
+
+  return (
+    <div className="card">
+      <h3>Your membership</h3>
+      <div className="hint">What you're subscribed to, straight from our payment provider.</div>
+
+      {msg && <div className={`notice ${msg.t}`} style={{ marginBottom: 12 }}>{msg.m}</div>}
+
+      {subs === null ? <div className="hint">Loading…</div> : subs.map((sub) => (
+        <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+          <div style={{ flex: 1, minWidth: 170 }}>
+            <div style={{ fontWeight: 600 }}>{sub.label}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+              {sub.currency === 'ZAR' ? 'R' : `${sub.currency} `}{sub.amount} a {sub.interval || 'month'}
+              {sub.cancel_at_period_end
+                ? ` · ends ${new Date(sub.period_end).toLocaleDateString()}`
+                : ` · renews ${new Date(sub.period_end).toLocaleDateString()}`}
+            </div>
+          </div>
+          {sub.cancel_at_period_end
+            ? <span className="status-tag s-pending">Cancelled</span>
+            : <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
+                onClick={() => { setMsg(null); setAsk(sub); }}>Cancel membership</button>}
+        </div>
+      ))}
+
+      {ask && (
+        <div className="modal-back" onClick={() => !busy && setAsk(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="serif">Cancel your {ask.label}?</h3>
+            <p style={{ color: 'var(--ink-soft)', fontSize: 14, lineHeight: 1.75 }}>
+              You'll keep full access until <b>{new Date(ask.period_end).toLocaleDateString()}</b>, the date you've
+              paid up to. After that it stops and you won't be charged again. Nothing is refunded, and you can
+              rejoin whenever you like.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setAsk(null)} disabled={busy}>Stay subscribed</button>
+              <button className="btn" style={{ width: 'auto', padding: '11px 20px' }}
+                onClick={confirmCancel} disabled={busy}>
+                {busy ? 'Cancelling…' : 'Yes, cancel it'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
