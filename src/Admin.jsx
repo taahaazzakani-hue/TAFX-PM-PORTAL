@@ -1258,8 +1258,20 @@ function StripeSubs({ admin, student }) {
     } finally { setBusy(false); }
   }
 
+  // Say so when there is nothing to cancel. Rendering nothing at all makes
+  // "this student pays by EFT" look identical to "the feature is broken".
   if (subs === false || (Array.isArray(subs) && subs.length === 0)) {
-    return note ? <div className="hint" style={{ marginTop: 10 }}>{note}</div> : null;
+    return (
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+        <div className="hint" style={{ marginBottom: 4 }}>Stripe subscriptions</div>
+        <div style={{ fontSize: 12.5, color: 'var(--ink-faint)' }}>
+          {subs === false
+            ? 'Could not reach Stripe just now. Refresh to try again.'
+            : `No recurring Stripe subscription on ${student.email}. Nothing to cancel — anyone paying by EFT or card-on-request won't appear here.`}
+        </div>
+        {note && <div className="hint" style={{ marginTop: 8 }}>{note}</div>}
+      </div>
+    );
   }
 
   return (
