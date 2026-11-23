@@ -27,6 +27,15 @@ const INTERVALS = [
   { id: 'D', label: 'D' },
 ];
 
+// Verified against the live widget — these fire without opening a menu.
+const SHORTCUTS = [
+  { keys: '⌥ T', label: 'Trendline' },
+  { keys: '⌥ H', label: 'Horizontal line' },
+  { keys: '⌥ J', label: 'Horizontal ray' },
+  { keys: '⌥ V', label: 'Vertical line' },
+  { keys: '⌥ C', label: 'Crossline' },
+];
+
 const THEMES = [
   { id: 'light', label: 'Light', bg: '#ffffff', grid: '#e7edf4' },
   { id: 'dark', label: 'Dark', bg: '#131722', grid: '#1f2735' },
@@ -171,11 +180,41 @@ export default function Charts() {
         <div ref={host} style={{ height: '100%', width: '100%' }} />
       </div>
 
+      {/* The embedded chart gives no favourites bar and its tool menus can't be
+          pinned open, so the fast way to draw is the keyboard. These shortcuts
+          are checked against the live widget. */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)',
+        }}
+      >
+        <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>
+          Draw without the menus
+        </span>
+        {SHORTCUTS.map((s) => (
+          <span
+            key={s.keys}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              border: '1px solid var(--line)', borderRadius: 8,
+              padding: '4px 9px', background: 'var(--panel)',
+            }}
+          >
+            <kbd style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--ink)' }}>
+              {s.keys}
+            </kbd>
+            <span style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{s.label}</span>
+          </span>
+        ))}
+      </div>
+
       <p className="hint" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--ink-faint)' }}>
-        Live prices via TradingView, shown in SAST. Use the toolbar on the left to draw your
-        levels, and the search box at the top of the chart for any instrument not listed above.
-        Quotes are indicative — your broker's spread means its figures will differ slightly, so
-        always size and execute from your own terminal.
+        Click once on the chart first so it has focus, then the shortcuts above place a tool
+        straight away. Every other tool's shortcut is listed beside its name in the toolbar
+        menus. Prices are live via TradingView, shown in SAST — they're indicative, so your
+        broker's spread means its figures differ slightly. Size and execute from your own
+        terminal.
       </p>
     </div>
   );
