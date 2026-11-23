@@ -27,10 +27,17 @@ const INTERVALS = [
   { id: 'D', label: 'D' },
 ];
 
+const THEMES = [
+  { id: 'light', label: 'Light', bg: '#ffffff', grid: '#e7edf4' },
+  { id: 'dark', label: 'Dark', bg: '#131722', grid: '#1f2735' },
+];
+
 export default function Charts() {
   const [sym, setSym] = useState(INSTRUMENTS[0]);
   const [tf, setTf] = useState('15');
+  const [theme, setTheme] = useState('light');
   const host = useRef(null);
+  const look = THEMES.find((t) => t.id === theme) || THEMES[0];
 
   // The embed script reads its config from its own innerHTML, so switching
   // symbol or timeframe means tearing the whole container down and rebuilding.
@@ -60,7 +67,9 @@ export default function Charts() {
       symbol: sym.tv,
       interval: tf,
       timezone: 'Africa/Johannesburg',
-      theme: 'light',
+      theme: look.id,
+      backgroundColor: look.bg,
+      gridColor: look.grid,
       style: '1',
       locale: 'en',
       enable_publishing: false,
@@ -75,7 +84,7 @@ export default function Charts() {
     el.appendChild(wrap);
 
     return () => { el.innerHTML = ''; };
-  }, [sym.tv, tf]);
+  }, [sym.tv, tf, look.id]);
 
   return (
     <div>
@@ -108,7 +117,7 @@ export default function Charts() {
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
         {INTERVALS.map((t) => {
           const on = t.id === tf;
           return (
@@ -130,6 +139,29 @@ export default function Charts() {
             </button>
           );
         })}
+
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {THEMES.map((t) => {
+            const on = t.id === theme;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                style={{
+                  border: `1px solid ${on ? 'var(--ink-soft)' : 'var(--line)'}`,
+                  background: on ? 'var(--panel-2)' : 'transparent',
+                  color: on ? 'var(--ink)' : 'var(--ink-faint)',
+                  borderRadius: 8,
+                  padding: '5px 11px',
+                  fontSize: 12,
+                  fontWeight: on ? 600 : 500,
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </span>
       </div>
 
       <div

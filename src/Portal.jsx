@@ -208,6 +208,10 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
   if (!content) return <WorkspaceLoading />;
 
   const myLevels = user.levels || [];
+  // Live Charts is still being tested — only Taaha's own account sees it.
+  // Widen this (or drop it) once it is ready for students.
+  const CHARTS_TESTERS = ['smctaaha@gmail.com'];
+  const canSeeCharts = CHARTS_TESTERS.includes((user.email || '').trim().toLowerCase());
   const courses = (content.courses || []).filter((c) => myLevels.includes(c.level) && c.level !== '1v1');
   // Courses shown to everyone as a locked preview. Enrolment is what unlocks
   // them, so they stay visible — a student cannot want something invisible.
@@ -289,7 +293,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
               ))}
             </div>
           )}
-          <NavItem id="charts" icon={<IcChart />} label="Live Charts" />
+          {canSeeCharts && <NavItem id="charts" icon={<IcChart />} label="Live Charts" />}
           {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
           {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Student Leaderboard" />}
           {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
@@ -327,7 +331,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'leaderboard' && hasJournal && <Leaderboard user={user} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
-          {view === 'charts' && <Charts />}
+          {view === 'charts' && canSeeCharts && <Charts />}
           {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}
           {view === 'profile' && <Profile user={user} initialNotice={discordReturn} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
