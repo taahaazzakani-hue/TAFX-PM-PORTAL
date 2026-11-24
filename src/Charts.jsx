@@ -45,8 +45,21 @@ export default function Charts() {
   const [sym, setSym] = useState(INSTRUMENTS[0]);
   const [tf, setTf] = useState('15');
   const [theme, setTheme] = useState('light');
+  const [fs, setFs] = useState(false);
   const host = useRef(null);
+  const frame = useRef(null);
   const look = THEMES.find((t) => t.id === theme) || THEMES[0];
+
+  useEffect(() => {
+    const onChange = () => setFs(document.fullscreenElement === frame.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFs = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else frame.current?.requestFullscreen?.();
+  };
 
   // The embed script reads its config from its own innerHTML, so switching
   // symbol or timeframe means tearing the whole container down and rebuilding.
@@ -97,6 +110,13 @@ export default function Charts() {
 
   return (
     <div>
+      {/* the frame is what goes fullscreen, so the tabs come with the chart */}
+      <div
+        ref={frame}
+        style={fs
+          ? { background: 'var(--bg-2)', padding: 14, display: 'flex', flexDirection: 'column', height: '100%' }
+          : undefined}
+      >
       <div
         style={{
           display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10,
@@ -170,14 +190,29 @@ export default function Charts() {
               </button>
             );
           })}
+          <button
+            onClick={toggleFs}
+            title="Fullscreen"
+            style={{
+              border: '1px solid var(--line)', background: 'transparent',
+              color: 'var(--ink-soft)', borderRadius: 8, padding: '5px 11px', fontSize: 12,
+            }}
+          >
+            {fs ? '⤢ Exit' : '⤢ Fullscreen'}
+          </button>
         </span>
       </div>
 
       <div
         className="card"
-        style={{ padding: 0, overflow: 'hidden', height: 'min(78vh, 760px)', minHeight: 440 }}
+        style={{
+          padding: 0, overflow: 'hidden', minHeight: 320,
+          height: fs ? 'auto' : 'min(78vh, 760px)',
+          flex: fs ? 1 : undefined,
+        }}
       >
         <div ref={host} style={{ height: '100%', width: '100%' }} />
+      </div>
       </div>
 
       {/* The embedded chart gives no favourites bar and its tool menus can't be

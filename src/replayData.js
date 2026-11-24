@@ -62,6 +62,15 @@ export async function loadMonth(symbol, month) {
   return p;
 }
 
+// Load the most recent `count` months of a symbol, newest last. Loading the
+// whole three years as objects would be ~100MB in the tab, so the chart opens
+// on recent history and reaches further back only when asked.
+export async function loadRecent(symbol, months, count) {
+  const take = months.slice(Math.max(0, months.length - count));
+  const parts = await Promise.all(take.map((m) => loadMonth(symbol, m)));
+  return parts.flat();
+}
+
 // Minutes per timeframe. Everything is built from M1, so these all divide
 // cleanly and no two timeframes can disagree with each other.
 export const TIMEFRAMES = [
