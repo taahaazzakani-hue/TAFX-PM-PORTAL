@@ -3,6 +3,8 @@ import { createChart, CrosshairMode } from 'lightweight-charts';
 import { loadIndex, loadRecent, aggregate, TIMEFRAMES } from './replayData.js';
 import { call } from './api.js';
 import DrawLayer, { ToolRail } from './ChartDraw.jsx';
+import { captureChart, downloadCanvas, copyCanvas, canCopyImages, canvasToBlob } from './chartShot.js';
+import { uploadImage } from './api.js';
 
 // Bar replay, laid out like the Live Charts page so the two feel like one tool.
 // The chart opens on the most recent price; replay only begins where the
@@ -82,6 +84,9 @@ export default function Replay({ user }) {
   const [speed, setSpeed] = useState(5);
   const [fs, setFs] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [shotMenu, setShotMenu] = useState(false);
+  const [shotNote, setShotNote] = useState(null);   // what just happened, shown briefly
+  const [shot, setShot] = useState(null);           // the picture handed to the journal form
   const [tool, setTool] = useState('cursor');
   const [drawings, setDrawings] = useState([]);
   const [drawColor, setDrawColor] = useState('#245bb2');
@@ -98,6 +103,7 @@ export default function Replay({ user }) {
   const startRef = useRef(null);          // where this replay began
   const keepRangeRef = useRef(null);      // visible window to carry across a timeframe change
   const tfIdRef = useRef('M15');
+  const clockRef = useRef('');
 
   const offset = index?.server_gmt_offset_seconds ?? 0;
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[4];
@@ -305,6 +311,49 @@ export default function Replay({ user }) {
     setTfId(id);
   };
 
+  // ---- chart pictures ----------------------------------------------------
+  // The caption is what makes the picture worth keeping: an unlabelled chart
+  // in a journal from three weeks ago tells a student nothing.
+  const takeShot = useCallback(() => {
+    const holder = hostRef.current?.parentElement;
+    const label = `${LABELS[symbol] || symbol}  ${tfIdRef.current}  ${clockRef.current || ''}`.trim();
+    return captureChart(holder, { background: look.bg, caption: label });
+  }, [symbol, look.bg]);
+
+  const flash = (msg) => {
+    setShotNote(msg);
+    window.setTimeout(() => setShotNote((n) => (n === msg ? null : n)), 2600);
+  };
+
+  const saveShot = () => {
+    const c = takeShot();
+    setShotMenu(false);
+    if (!c) { flash("Couldn't read the chart."); return; }
+    const when = (clockRef.current || '').replace(/[: ]/g, '-');
+    downloadCanvas(c, `${LABELS[symbol] || symbol}-${tfIdRef.current}-${when}.png`);
+    flash('Saved to your downloads.');
+  };
+
+  const copyShot = async () => {
+    const c = takeShot();
+    setShotMenu(false);
+    if (!c) { flash("Couldn't read the chart."); return; }
+    try {
+      await copyCanvas(c);
+      flash('Copied — paste it anywhere.');
+    } catch {
+      flash("Your browser blocked the copy. Use Save image instead.");
+    }
+  };
+
+  const journalShot = async () => {
+    const c = takeShot();
+    setShotMenu(false);
+    setPlaying(false);
+    setShot(c ? await canvasToBlob(c) : null);
+    setLogging(true);
+  };
+
   const step = (n) => { setPlaying(false); setShown((v) => Math.min(bars.length, (v ?? bars.length) + n)); };
   const exitReplay = () => {
     setPlaying(false); setPicking(false); setShown(null);
@@ -332,6 +381,7 @@ export default function Replay({ user }) {
   const current = bars[(shown === null ? bars.length : shown) - 1];
   const clockDate = current ? new Date((current.time + offset) * 1000) : null;
   const clock = clockDate ? clockDate.toISOString().replace('T', ' ').slice(0, 16) : '—';
+  clockRef.current = clock === '—' ? '' : clock;
 
   const pill = (active) => ({
     border: `1px solid ${active ? 'var(--gold)' : 'var(--line)'}`,
@@ -340,6 +390,11 @@ export default function Replay({ user }) {
     borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: active ? 600 : 500,
     transition: 'all .15s',
   });
+  const shotItem = {
+    display: 'block', width: '100%', textAlign: 'left',
+    border: 'none', background: 'transparent', color: 'var(--ink)',
+    borderRadius: 7, padding: '8px 10px', fontSize: 13,
+  };
   const chip = (active) => ({
     border: `1px solid ${active ? 'var(--ink-soft)' : 'var(--line)'}`,
     background: active ? 'var(--panel-2)' : 'transparent',
@@ -363,8 +418,8 @@ export default function Replay({ user }) {
       <div
         ref={wrapRef}
         style={fs
-          ? { background: 'var(--bg-2)', padding: 14, display: 'flex', flexDirection: 'column', height: '100%' }
-          : undefined}
+          ? { background: 'var(--bg-2)', padding: 14, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }
+          : { position: 'relative' }}
       >
         {/* same two rows, same order, as Live Charts */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -382,6 +437,55 @@ export default function Replay({ user }) {
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button onClick={() => setTheme('light')} style={chip(theme === 'light')}>Light</button>
             <button onClick={() => setTheme('dark')} style={chip(theme === 'dark')}>Dark</button>
+
+            {/* Snapshot, where TradingView keeps theirs. The menu is anchored
+                to the button rather than floating over the chart, so it opens
+                in the same place in fullscreen as out of it. */}
+            <span style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShotMenu((v) => !v)}
+                style={chip(shotMenu)}
+                title="Picture of this chart"
+                aria-haspopup="menu"
+                aria-expanded={shotMenu}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" style={{ verticalAlign: '-2px' }}>
+                  <path d="M3 8h3.5L8 6h8l1.5 2H21v11H3z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <circle cx="12" cy="13.5" r="3.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+              </button>
+
+              {shotMenu && (
+                <>
+                  <div
+                    onClick={() => setShotMenu(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+                  />
+                  <div
+                    role="menu"
+                    style={{
+                      position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41,
+                      minWidth: 208, padding: 4,
+                      background: 'var(--panel)', border: '1px solid var(--line)',
+                      borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,.14)',
+                    }}
+                  >
+                    <button onClick={saveShot} style={shotItem}>Save image</button>
+                    <button
+                      onClick={copyShot}
+                      style={{ ...shotItem, opacity: canCopyImages() ? 1 : 0.45 }}
+                      disabled={!canCopyImages()}
+                      title={canCopyImages() ? 'Copy to the clipboard' : "This browser can't copy images"}
+                    >
+                      Copy image
+                    </button>
+                    <div style={{ height: 1, background: 'var(--line)', margin: '4px 6px' }} />
+                    <button onClick={journalShot} style={shotItem}>Journal with this image</button>
+                  </div>
+                </>
+              )}
+            </span>
+
             <button onClick={toggleFs} style={chip(false)} title="Fullscreen">
               {fs ? '⤢ Exit' : '⤢ Fullscreen'}
             </button>
@@ -478,7 +582,7 @@ export default function Replay({ user }) {
                 ))}
               </span>
               <button className="btn" style={{ width: 'auto', padding: '9px 18px' }}
-                      onClick={() => { setPlaying(false); setLogging(true); }}>
+                      onClick={journalShot}>
                 ✎ Log to journal
               </button>
               <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
@@ -502,6 +606,20 @@ export default function Replay({ user }) {
         {/* Inside the fullscreen wrapper on purpose: anything rendered outside
             it is simply not shown while the browser is in fullscreen, so the
             journal form would open invisibly. */}
+        {shotNote && (
+          <div
+            style={{
+              position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+              bottom: 26, zIndex: 50,
+              background: 'var(--ink)', color: 'var(--bg)',
+              borderRadius: 999, padding: '8px 16px', fontSize: 13,
+              boxShadow: '0 8px 24px rgba(0,0,0,.2)', pointerEvents: 'none',
+            }}
+          >
+            {shotNote}
+          </div>
+        )}
+
         {logging && (
           <LogModal
             user={user}
@@ -509,7 +627,8 @@ export default function Replay({ user }) {
             tf={tfId}
             when={clockDate}
             startedAt={startRef.current}
-            onClose={() => setLogging(false)}
+            shot={shot}
+            onClose={() => { setLogging(false); setShot(null); }}
           />
         )}
       </div>
@@ -533,7 +652,7 @@ export default function Replay({ user }) {
 
 // Writes the replayed trade into the student's journal as a backtest entry,
 // with the pair, date and session already filled from the chart.
-function LogModal({ user, pair, tf, when, startedAt, onClose }) {
+function LogModal({ user, pair, tf, when, startedAt, shot, onClose }) {
   const [direction, setDirection] = useState('long');
   const [outcome, setOutcome] = useState('win');
   const [rr, setRr] = useState('');
@@ -543,6 +662,17 @@ function LogModal({ user, pair, tf, when, startedAt, onClose }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [fail, setFail] = useState(null);
+  const [attach, setAttach] = useState(true);
+
+  // A preview of the chart as it was when they pressed the button. Revoked on
+  // close so a long session of logging trades does not leak blobs.
+  const [preview, setPreview] = useState(null);
+  useEffect(() => {
+    if (!shot) { setPreview(null); return undefined; }
+    const url = URL.createObjectURL(shot);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [shot]);
 
   // Backtest trades belong to a session — that is what the homework gate counts,
   // so a replay logged without one would never show up against their target.
@@ -577,6 +707,19 @@ function LogModal({ user, pair, tf, when, startedAt, onClose }) {
         });
         sid = r?.session?.id;
       }
+      // The picture is uploaded first so the entry carries its URL, but a
+      // failed upload must not cost them the trade they just wrote up.
+      let images = [];
+      if (shot && attach) {
+        try {
+          const name = `replay-${pair}-${tf}-${Date.now()}.png`;
+          const url = await uploadImage(new File([shot], name, { type: 'image/png' }), 'journal');
+          images = [url];
+        } catch {
+          images = [];
+        }
+      }
+
       await call('journal_save', {
         user_id: user.id,
         entry: {
@@ -592,9 +735,13 @@ function LogModal({ user, pair, tf, when, startedAt, onClose }) {
           trade_type: 'backtest',
           session_id: sid || null,
           level,
+          images,
           confluences: [],
         },
       });
+      if (shot && attach && !images.length) {
+        setFail('Trade saved, but the chart picture would not upload.');
+      }
       setDone(true);
     } catch (e) {
       setFail(String(e.message || e));
@@ -618,9 +765,11 @@ function LogModal({ user, pair, tf, when, startedAt, onClose }) {
         {done ? (
           <>
             <div className="notice info" style={{ marginTop: 10 }}>
-              Saved to your journal as a backtest on <b>{pair}</b>. It counts toward your
-              logged backtests and shows up in your stats.
+              Saved to your journal as a backtest on <b>{pair}</b>
+              {shot && attach && !fail ? ', with the chart picture attached' : ''}. It counts
+              toward your logged backtests and shows up in your stats.
             </div>
+            {fail && <div className="notice" style={{ marginTop: 10 }}>{fail}</div>}
             <div className="modal-actions">
               <button className="btn" onClick={onClose}>Done</button>
             </div>
@@ -645,6 +794,34 @@ function LogModal({ user, pair, tf, when, startedAt, onClose }) {
               <span>{when ? when.toISOString().replace('T', ' ').slice(0, 16) : '—'} SAST</span>
               {killzone && <span>{killzone} session</span>}
             </div>
+
+            {preview && (
+              <div className="field">
+                <label>Chart picture</label>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <img
+                    src={preview}
+                    alt="The chart as you logged it"
+                    style={{
+                      width: 188, borderRadius: 8, border: '1px solid var(--line)',
+                      display: 'block', opacity: attach ? 1 : 0.4,
+                    }}
+                  />
+                  <label style={{
+                    display: 'flex', gap: 8, alignItems: 'center',
+                    fontSize: 13, color: 'var(--ink-soft)', fontWeight: 500,
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={attach}
+                      onChange={(e) => setAttach(e.target.checked)}
+                      style={{ width: 'auto', margin: 0 }}
+                    />
+                    Attach to this entry
+                  </label>
+                </div>
+              </div>
+            )}
 
             <div className="field">
               <label>Backtest session</label>
