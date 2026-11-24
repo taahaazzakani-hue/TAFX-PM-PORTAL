@@ -43,17 +43,27 @@ export function ToolRail({ tool, setTool, color, setColor, onUndo, onClear, coun
     background: active ? 'rgba(36,91,178,.10)' : 'transparent',
     color: active ? 'var(--gold)' : 'var(--ink-soft)',
     borderRadius: 8, padding: 0,
+    // the browser's focus ring lingers after a click and reads as "still
+    // selected", which is exactly the confusion this rail must avoid
+    outline: 'none',
   });
 
   return (
+    // A column beside the chart, not floating over it — overlaying the rail
+    // hid the left-most candles and there was no way to move it aside.
     <div style={{
-      position: 'absolute', top: 10, left: 10, zIndex: 6,
+      flex: '0 0 auto', alignSelf: 'stretch',
       display: 'flex', flexDirection: 'column', gap: 2,
-      background: 'var(--panel)', border: '1px solid var(--line)',
-      borderRadius: 10, padding: 4, boxShadow: 'var(--shadow)',
+      background: 'var(--panel)', borderRight: '1px solid var(--line)',
+      padding: '6px 4px',
     }}>
       {TOOLS.map((t) => (
-        <button key={t.id} title={t.hint} onClick={() => setTool(t.id)} style={btn(tool === t.id)}>
+        <button
+          key={t.id} title={t.hint}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setTool(t.id)}
+          style={btn(tool === t.id)}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24">{icon(t.id)}</svg>
         </button>
       ))}
@@ -202,6 +212,20 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   }, [chartRef, paint]);
 
   useEffect(() => { paint(); }, [drawings, color, paint]);
+
+  // Escape drops an armed tool. Without it a click that lands off the data
+  // does nothing and leaves the tool stuck on, with no obvious way out.
+  useEffect(() => {
+    if (tool === 'cursor') return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      pendingRef.current = null;
+      setTool('cursor');
+      paint();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tool, setTool, paint]);
 
   // Repaint when the candles themselves change — a new timeframe or another
   // revealed bar rescales the axes, and panning alone never fires then, which

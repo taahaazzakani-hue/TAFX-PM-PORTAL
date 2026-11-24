@@ -346,17 +346,27 @@ export default function Replay({ user }) {
         <div
           className="card"
           style={{
-            padding: 0, overflow: 'hidden', position: 'relative',
+            padding: 0, overflow: 'hidden', display: 'flex',
             height: fs ? 'auto' : 'min(70vh, 660px)',
             flex: fs ? 1 : undefined, minHeight: 320,
             outline: picking ? '2px solid var(--gold)' : 'none',
             background: look.bg,
           }}
         >
-          <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? SCISSORS : 'default' }} />
-
           {!picking && (
-            <>
+            <ToolRail
+              tool={tool} setTool={setTool}
+              color={drawColor} setColor={setDrawColor}
+              count={drawings.length}
+              onUndo={() => setDrawings((d) => d.slice(0, -1))}
+              onClear={() => setDrawings([])}
+            />
+          )}
+
+          <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+            <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? SCISSORS : 'default' }} />
+
+            {!picking && (
               <DrawLayer
                 chartRef={chartRef} seriesRef={seriesRef}
                 tool={tool} setTool={setTool}
@@ -365,15 +375,7 @@ export default function Replay({ user }) {
                 version={`${tfId}:${bars.length}:${shown}:${theme}`}
                 times={chartTimes}
               />
-              <ToolRail
-                tool={tool} setTool={setTool}
-                color={drawColor} setColor={setDrawColor}
-                count={drawings.length}
-                onUndo={() => setDrawings((d) => d.slice(0, -1))}
-                onClear={() => setDrawings([])}
-              />
-            </>
-          )}
+            )}
 
           {picking && (
             <div style={{
@@ -394,6 +396,7 @@ export default function Replay({ user }) {
               Loading candles…
             </div>
           )}
+          </div>
         </div>
 
         <div style={{
