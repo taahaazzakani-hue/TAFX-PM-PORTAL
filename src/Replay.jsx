@@ -204,7 +204,10 @@ export default function Replay({ user }) {
     chartRef.current = chart;
     seriesRef.current = series;
     // a handle for the browser tests; inert unless the flag is set by hand
-    if (typeof window !== 'undefined' && window.__TAFX_DEBUG) window.__tafxChart = chart;
+    if (typeof window !== 'undefined' && window.__TAFX_DEBUG) {
+      window.__tafxChart = chart;
+      window.__tafxSeries = series;
+    }
     return () => { chart.remove(); chartRef.current = null; seriesRef.current = null; };
     // deliberately NOT keyed on theme: rebuilding the chart would drop the
     // series data with it and leave an empty pane

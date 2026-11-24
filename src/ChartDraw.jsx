@@ -196,8 +196,11 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     const chart = chartRef.current;
     if (!chart) return null;
     const ts = chart.timeScale();
+    // Any whole index works, in or out of the data, so anchor the measurement
+    // next to what is on screen: the shorter the lever, the less floating
+    // point drift shows up as a jitter while zooming.
     const r = ts.getVisibleLogicalRange();
-    const base = r ? Math.max(0, Math.round(r.from)) : 0;
+    const base = r ? Math.round(r.from) : 0;
     const c0 = ts.logicalToCoordinate(base);
     const c1 = ts.logicalToCoordinate(base + 1);
     if (c0 == null || c1 == null) return null;
@@ -234,6 +237,25 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     return a && b ? { kind: d.type, a, b } : null;
   }, [project, seriesRef]);
 
+  // Mid-zoom the chart will briefly decline to place a price or report its
+  // scale, and a drawing that asks at that moment gets nothing back. Dropping
+  // it for that one frame is the flicker you see while zooming, so the last
+  // position it had is kept and reused instead. The signature makes sure it is
+  // the same drawing being redrawn and not whatever now sits at that index.
+  const lastGeom = useRef(new Map());
+  const sigOf = (d) => `${d.type}|${d.t1}|${d.t2}|${d.p1}|${d.p2}|${d.price}`;
+
+  const steadyGeom = useCallback((d, key) => {
+    const g = geomOf(d);
+    const sig = sigOf(d);
+    if (g) {
+      lastGeom.current.set(key, { sig, g });
+      return g;
+    }
+    const held = lastGeom.current.get(key);
+    return held && held.sig === sig ? held.g : null;
+  }, [geomOf]);
+
   // Which part of a drawing is under the pointer: a named handle, 'body', or
   // nothing.
   function partAt(d, g, px, py) {
@@ -264,11 +286,11 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   const findHit = useCallback((px, py) => {
     const list = drawingsRef.current;
     for (let i = list.length - 1; i >= 0; i--) {
-      const part = partAt(list[i], geomOf(list[i]), px, py);
+      const part = partAt(list[i], steadyGeom(list[i], i), px, py);
       if (part) return { i, part };
     }
     return null;
-  }, [geomOf]);
+  }, [steadyGeom]);
 
   // Where a drag puts a drawing. Handles follow the pointer outright; the
   // body moves by however far the pointer has travelled.
@@ -348,7 +370,7 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     const selIdx = selRef.current;
 
     for (const { d, i } of all) {
-      const g = geomOf(d);
+      const g = steadyGeom(d, i);
       if (!g) continue;
       const on = i === selIdx;
       ctx.strokeStyle = d.color || colorRef.current;
@@ -376,7 +398,7 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     }
 
     ctx.restore();
-  }, [chartRef, seriesRef, geomOf]);
+  }, [chartRef, seriesRef, steadyGeom]);
 
   function dot(ctx, x, y) {
     ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
@@ -420,7 +442,6 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   useEffect(() => {
     let stop = false;
     let wait = 0;
-    let raf = 0;
     let off = null;
 
     const attach = () => {
@@ -428,14 +449,27 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
       const chart = chartRef.current;
       if (!chart) { wait = requestAnimationFrame(attach); return; }
       const ts = chart.timeScale();
-      // Repaint on the next frame rather than inside the callback: reading the
-      // scale back from the chart while it is mid-gesture cancels its own pan.
+      // Painted twice per gesture frame, on purpose.
+      //
+      // Zooming moves both axes, and they do not settle together: the chart
+      // tells us the bar range has changed before it has re-fitted the price
+      // scale to the candles now in view. Painting only on the event leaves a
+      // frame drawn against the old price scale, and painting only on the next
+      // frame leaves one drawn against the old bar range — either way a
+      // drawing jumps and then corrects itself, which is the flicker. So paint
+      // now for the bar range, and again next frame once the price scale has
+      // caught up.
+      let follow = 0;
       const onRange = () => {
-        if (raf) return;
-        raf = requestAnimationFrame(() => { raf = 0; paint(); });
+        paint();
+        if (follow) return;
+        follow = requestAnimationFrame(() => { follow = 0; paint(); });
       };
       ts.subscribeVisibleLogicalRangeChange(onRange);
-      off = () => { try { ts.unsubscribeVisibleLogicalRangeChange(onRange); } catch { /* chart already gone */ } };
+      off = () => {
+        if (follow) cancelAnimationFrame(follow);
+        try { ts.unsubscribeVisibleLogicalRangeChange(onRange); } catch { /* chart already gone */ }
+      };
       paint();
     };
     attach();
@@ -443,7 +477,6 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     return () => {
       stop = true;
       cancelAnimationFrame(wait);
-      if (raf) cancelAnimationFrame(raf);
       if (off) off();
     };
   }, [chartRef, paint, version]);
