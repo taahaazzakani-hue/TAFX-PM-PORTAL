@@ -334,7 +334,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
           {view === 'charts' && canSeeCharts && <Charts />}
-          {view === 'replay' && canSeeCharts && <Replay />}
+          {view === 'replay' && canSeeCharts && <Replay user={user} />}
           {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}
           {view === 'profile' && <Profile user={user} initialNotice={discordReturn} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}

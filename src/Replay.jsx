@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CrosshairMode } from 'lightweight-charts';
 import { loadIndex, loadRecent, aggregate, TIMEFRAMES } from './replayData.js';
+import { call } from './api.js';
 
-// Bar replay, worked the way TradingView's does: the chart opens on the most
-// recent price with full history behind it, and replay only starts where the
-// student chooses. Click the replay button, click the candle to rewind to, and
-// everything after it is hidden until they step forward.
+// Bar replay, laid out like the Live Charts page so the two feel like one tool.
+// The chart opens on the most recent price; replay only begins where the
+// student chooses, and a finished replay can be written straight into their
+// journal as a backtest trade.
 
 const LABELS = {
   USTECH100M: 'USA100',
-  XAUUSD: 'GOLD',
+  XAUUSD: 'XAUUSD',
   US30: 'USA30',
   DE40: 'GER40',
 };
@@ -22,14 +23,26 @@ const SPEEDS = [
   { id: 30, label: '30×', ms: 33 },
 ];
 
-const INITIAL_MONTHS = 12;   // opened on load
-const MAX_BARS = 60000;      // kept on the chart; plenty of scrollback
+const THEMES = {
+  light: {
+    bg: '#ffffff', text: '#58687b', grid: '#eef3f8', border: '#d8e2ec',
+    veil: 'rgba(255,255,255,.75)',
+  },
+  dark: {
+    bg: '#131722', text: '#9aa5b1', grid: '#1c2430', border: '#2a3340',
+    veil: 'rgba(19,23,34,.75)',
+  },
+};
 
-// candles that would be cut off, shown while choosing the replay point
+const MODELS = ['TA Model', 'Noctus Model', 'PM Session Model', 'TA Reversal Model', 'TA MMXM'];
+const JOURNAL_LEVELS = ['beginner', 'intermediate', 'advanced', 'advanced2', '1v1'];
+
+const INITIAL_MONTHS = 12;
+const MAX_BARS = 60000;
+
 const GREY = '#b9c4d0';
 const GREY_WICK = '#cbd4de';
 
-// scissors, so the cursor says what the click will do
 const SCISSORS =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' " +
   "viewBox='0 0 24 24' fill='none' stroke='%23172535' stroke-width='1.8' stroke-linecap='round'>" +
@@ -37,12 +50,22 @@ const SCISSORS =
   "<line x1='20' y1='4' x2='8.1' y2='15.9'/><line x1='14.5' y1='14.5' x2='20' y2='20'/>" +
   "<line x1='8.1' y1='8.1' x2='12' y2='12'/></svg>\") 12 12, crosshair";
 
-export default function Replay() {
+// London/NY/Asia by SAST hour, so the journal entry doesn't need asking
+function killzoneFor(date) {
+  const h = date.getUTCHours();          // date is already shifted to server time
+  if (h >= 2 && h < 9) return 'Asia';
+  if (h >= 9 && h < 15) return 'London';
+  if (h >= 15 && h < 23) return 'New York';
+  return '';
+}
+
+export default function Replay({ user }) {
   const [index, setIndex] = useState(null);
   const [err, setErr] = useState(null);
 
   const [symbol, setSymbol] = useState('USTECH100M');
   const [tfId, setTfId] = useState('M15');
+  const [theme, setTheme] = useState('light');
   const [loading, setLoading] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
 
@@ -52,26 +75,28 @@ export default function Replay() {
   const [m1, setM1] = useState(null);
   const [bars, setBars] = useState([]);
 
-  // replay state: null = live view, otherwise how many bars are revealed
   const [shown, setShown] = useState(null);
   const [picking, setPicking] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(5);
   const [fs, setFs] = useState(false);
+  const [logging, setLogging] = useState(false);
 
   const hostRef = useRef(null);
   const wrapRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
-  const cursorRef = useRef(null);     // timestamp at the end of the last revealed bar
+  const cursorRef = useRef(null);
   const pickingRef = useRef(false);
   const barsRef = useRef([]);
   const hoverRef = useRef(null);
-  const [hover, setHover] = useState(null);   // bar time under the cursor while picking
+  const [hover, setHover] = useState(null);
+  const startRef = useRef(null);          // where this replay began
 
   const offset = index?.server_gmt_offset_seconds ?? 0;
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[4];
   const inReplay = shown !== null;
+  const look = THEMES[theme];
 
   useEffect(() => {
     pickingRef.current = picking;
@@ -91,8 +116,7 @@ export default function Replay() {
     setLoading(true);
     setErr(null);
     try {
-      const data = await loadRecent(sym, info.months, months);
-      setM1(data);
+      setM1(await loadRecent(sym, info.months, months));
       setAllLoaded(months >= info.months.length);
     } catch (e) {
       setErr(String(e.message || e));
@@ -103,14 +127,11 @@ export default function Replay() {
 
   useEffect(() => {
     if (!index) return;
-    setShown(null);
-    setPlaying(false);
-    setPicking(false);
-    cursorRef.current = null;
+    setShown(null); setPlaying(false); setPicking(false);
+    cursorRef.current = null; startRef.current = null;
     load(symbol, INITIAL_MONTHS);
   }, [index, symbol, load]);
 
-  // aggregate, and hold the same moment across timeframe changes
   useEffect(() => {
     if (!m1) return;
     let agg = aggregate(m1, tf.min, offset);
@@ -131,35 +152,36 @@ export default function Replay() {
 
     const chart = createChart(el, {
       autoSize: true,
-      layout: { background: { color: '#ffffff' }, textColor: '#58687b', fontFamily: 'inherit' },
-      grid: { vertLines: { color: '#eef3f8' }, horzLines: { color: '#eef3f8' } },
+      layout: { background: { color: look.bg }, textColor: look.text, fontFamily: 'inherit' },
+      grid: { vertLines: { color: look.grid }, horzLines: { color: look.grid } },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#d8e2ec' },
-      timeScale: { borderColor: '#d8e2ec', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: look.border },
+      timeScale: { borderColor: look.border, timeVisible: true, secondsVisible: false },
     });
     const series = chart.addCandlestickSeries({
       upColor, downColor, borderUpColor: upColor, borderDownColor: downColor,
       wickUpColor: upColor, wickDownColor: downColor,
     });
 
-    // while armed, hovering greys out everything that would be cut off, so the
-    // student sees exactly what they are about to hide before committing
     chart.subscribeCrosshairMove((param) => {
-      if (!pickingRef.current) { if (hoverRef.current !== null) { hoverRef.current = null; setHover(null); } return; }
+      if (!pickingRef.current) {
+        if (hoverRef.current !== null) { hoverRef.current = null; setHover(null); }
+        return;
+      }
       const t = param.time == null ? null : Number(param.time) - offset;
       if (t !== hoverRef.current) { hoverRef.current = t; setHover(t); }
     });
 
-    // clicking the chart while armed chooses where replay begins
     chart.subscribeClick((param) => {
       if (!pickingRef.current || param.time == null) return;
-      const t = Number(param.time) - offset;        // chart times carry the broker offset
+      const t = Number(param.time) - offset;
       const list = barsRef.current;
       let n = 0;
       while (n < list.length && list[n].time <= t) n++;
       if (n > 0) {
         setShown(n);
         cursorRef.current = list[n - 1].time;
+        startRef.current = list[n - 1].time;
         setPicking(false);
       }
     });
@@ -167,8 +189,19 @@ export default function Replay() {
     chartRef.current = chart;
     seriesRef.current = series;
     return () => { chart.remove(); chartRef.current = null; seriesRef.current = null; };
-    // `index` gates the first render, so the container does not exist before it
+    // deliberately NOT keyed on theme: rebuilding the chart would drop the
+    // series data with it and leave an empty pane
   }, [index, offset]);
+
+  // theme is a restyle, not a rebuild
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      layout: { background: { color: look.bg }, textColor: look.text },
+      grid: { vertLines: { color: look.grid }, horzLines: { color: look.grid } },
+      rightPriceScale: { borderColor: look.border },
+      timeScale: { borderColor: look.border },
+    });
+  }, [look]);
 
   useEffect(() => {
     seriesRef.current?.applyOptions({
@@ -177,9 +210,6 @@ export default function Replay() {
     });
   }, [upColor, downColor]);
 
-  // Feed the chart: everything when live, only the revealed part in replay.
-  // While picking, bars past the cursor stay on screen but go grey — the same
-  // "this is what you're cutting" preview TradingView shows.
   useEffect(() => {
     const s = seriesRef.current;
     if (!s || !bars.length) return;
@@ -187,18 +217,13 @@ export default function Replay() {
     if (picking && hover != null) {
       s.setData(bars.map((b) => (b.time <= hover
         ? { ...b, time: b.time + offset }
-        : {
-            ...b, time: b.time + offset,
-            color: GREY, borderColor: GREY, wickColor: GREY_WICK,
-          })));
+        : { ...b, time: b.time + offset, color: GREY, borderColor: GREY, wickColor: GREY_WICK })));
       return;
     }
-
     const end = shown === null ? bars.length : shown;
     s.setData(bars.slice(0, end).map((b) => ({ ...b, time: b.time + offset })));
   }, [bars, shown, offset, picking, hover]);
 
-  // keep the cursor at the END of the last revealed bar
   useEffect(() => {
     if (shown === null) return;
     const b = bars[shown - 1];
@@ -226,18 +251,15 @@ export default function Replay() {
   }, []);
 
   const toggleFs = () => {
-    const el = wrapRef.current;
-    if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen();
-    else el.requestFullscreen?.();
+    else wrapRef.current?.requestFullscreen?.();
   };
 
   const step = (n) => { setPlaying(false); setShown((v) => Math.min(bars.length, (v ?? bars.length) + n)); };
-
   const exitReplay = () => {
-    setPlaying(false); setPicking(false); setShown(null); cursorRef.current = null;
+    setPlaying(false); setPicking(false); setShown(null);
+    cursorRef.current = null; startRef.current = null;
   };
-
   const randomPoint = () => {
     if (!bars.length) return;
     const lo = Math.floor(bars.length * 0.15);
@@ -245,19 +267,20 @@ export default function Replay() {
     const n = lo + Math.floor(Math.random() * (hi - lo));
     setPlaying(false); setPicking(false); setShown(n);
     cursorRef.current = bars[n - 1]?.time ?? null;
+    startRef.current = bars[n - 1]?.time ?? null;
   };
 
   const atEnd = shown !== null && shown >= bars.length;
   const current = bars[(shown === null ? bars.length : shown) - 1];
-  const clock = current
-    ? new Date((current.time + offset) * 1000).toISOString().replace('T', ' ').slice(0, 16)
-    : '—';
+  const clockDate = current ? new Date((current.time + offset) * 1000) : null;
+  const clock = clockDate ? clockDate.toISOString().replace('T', ' ').slice(0, 16) : '—';
 
   const pill = (active) => ({
     border: `1px solid ${active ? 'var(--gold)' : 'var(--line)'}`,
     background: active ? 'var(--gold)' : 'var(--panel)',
     color: active ? '#fff' : 'var(--ink-soft)',
     borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: active ? 600 : 500,
+    transition: 'all .15s',
   });
   const chip = (active) => ({
     border: `1px solid ${active ? 'var(--ink-soft)' : 'var(--line)'}`,
@@ -279,34 +302,33 @@ export default function Replay() {
 
   return (
     <div>
-      {/* wrapper is what goes fullscreen, so the controls come with the chart */}
       <div
         ref={wrapRef}
         style={fs
           ? { background: 'var(--bg-2)', padding: 14, display: 'flex', flexDirection: 'column', height: '100%' }
           : undefined}
       >
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-        {Object.keys(index.symbols).map((s) => (
-          <button key={s} style={pill(s === symbol)} onClick={() => setSymbol(s)}>
-            {LABELS[s] || s}
-          </button>
-        ))}
-      </div>
+        {/* same two rows, same order, as Live Charts */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+          {Object.keys(index.symbols).map((s) => (
+            <button key={s} style={pill(s === symbol)} onClick={() => setSymbol(s)}>
+              {LABELS[s] || s}
+            </button>
+          ))}
+        </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-        {TIMEFRAMES.map((t) => (
-          <button key={t.id} onClick={() => setTfId(t.id)} style={chip(t.id === tfId)}>{t.id}</button>
-        ))}
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>Up</label>
-          <input type="color" value={upColor} onChange={(e) => setUpColor(e.target.value)}
-                 style={{ width: 28, height: 24, border: '1px solid var(--line)', borderRadius: 6, padding: 0, background: 'none' }} />
-          <label style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>Down</label>
-          <input type="color" value={downColor} onChange={(e) => setDownColor(e.target.value)}
-                 style={{ width: 28, height: 24, border: '1px solid var(--line)', borderRadius: 6, padding: 0, background: 'none' }} />
-        </span>
-      </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
+          {TIMEFRAMES.map((t) => (
+            <button key={t.id} onClick={() => setTfId(t.id)} style={chip(t.id === tfId)}>{t.id}</button>
+          ))}
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button onClick={() => setTheme('light')} style={chip(theme === 'light')}>Light</button>
+            <button onClick={() => setTheme('dark')} style={chip(theme === 'dark')}>Dark</button>
+            <button onClick={toggleFs} style={chip(false)} title="Fullscreen">
+              {fs ? '⤢ Exit' : '⤢ Fullscreen'}
+            </button>
+          </span>
+        </div>
 
         <div
           className="card"
@@ -315,6 +337,7 @@ export default function Replay() {
             height: fs ? 'auto' : 'min(70vh, 660px)',
             flex: fs ? 1 : undefined, minHeight: 320,
             outline: picking ? '2px solid var(--gold)' : 'none',
+            background: look.bg,
           }}
         >
           <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? SCISSORS : 'default' }} />
@@ -324,8 +347,6 @@ export default function Replay() {
               position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
               background: 'var(--gold)', color: '#fff', padding: '7px 14px',
               borderRadius: 999, fontSize: 12.5, fontWeight: 600, pointerEvents: 'none',
-              // the chart library gives its canvases a stacking order of their
-              // own, so anything laid over them needs an explicit one
               zIndex: 5,
             }}>
               Click the candle you want to start from
@@ -335,8 +356,7 @@ export default function Replay() {
           {loading && (
             <div style={{
               position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-              background: 'rgba(255,255,255,.75)', fontSize: 13, color: 'var(--ink-soft)',
-              zIndex: 5,
+              background: look.veil, fontSize: 13, color: 'var(--ink-soft)', zIndex: 5,
             }}>
               Loading candles…
             </div>
@@ -368,35 +388,33 @@ export default function Replay() {
                 {playing ? '❚❚  Pause' : '▶  Play'}
               </button>
               <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
-                      disabled={atEnd} onClick={() => step(1)}>
-                ▶❘ +1
-              </button>
+                      disabled={atEnd} onClick={() => step(1)}>▶❘ +1</button>
               <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
-                      disabled={atEnd} onClick={() => step(10)}>
-                +10
-              </button>
+                      disabled={atEnd} onClick={() => step(10)}>+10</button>
               <span style={{ display: 'flex', gap: 4, marginLeft: 4 }}>
                 {SPEEDS.map((s) => (
-                  <button key={s.id} onClick={() => setSpeed(s.id)} style={chip(s.id === speed)}>
-                    {s.label}
-                  </button>
+                  <button key={s.id} onClick={() => setSpeed(s.id)} style={chip(s.id === speed)}>{s.label}</button>
                 ))}
               </span>
-              <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
-                      onClick={exitReplay}>
-                Exit replay
+              <button className="btn" style={{ width: 'auto', padding: '9px 18px' }}
+                      onClick={() => { setPlaying(false); setLogging(true); }}>
+                ✎ Log to journal
               </button>
+              <button className="btn ghost" style={{ width: 'auto', padding: '9px 16px' }}
+                      onClick={exitReplay}>Exit replay</button>
             </>
           )}
 
-          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>Up</label>
+            <input type="color" value={upColor} onChange={(e) => setUpColor(e.target.value)}
+                   style={{ width: 26, height: 22, border: '1px solid var(--line)', borderRadius: 6, padding: 0, background: 'none' }} />
+            <label style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>Down</label>
+            <input type="color" value={downColor} onChange={(e) => setDownColor(e.target.value)}
+                   style={{ width: 26, height: 22, border: '1px solid var(--line)', borderRadius: 6, padding: 0, background: 'none' }} />
             <span style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--ink-soft)' }}>
               {clock} <span style={{ color: 'var(--ink-faint)' }}>SAST</span>
             </span>
-            <button className="btn ghost" style={{ width: 'auto', padding: '9px 14px' }}
-                    onClick={toggleFs} title="Fullscreen">
-              {fs ? '⤢ Exit fullscreen' : '⤢ Fullscreen'}
-            </button>
           </span>
         </div>
       </div>
@@ -410,9 +428,213 @@ export default function Replay() {
         )}
         <p className="hint" style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-faint)' }}>
           Opens on the latest price with {allLoaded ? 'the full three years' : `${INITIAL_MONTHS} months`} of
-          history behind it. Switching timeframe holds the same moment — every timeframe is
-          built from the same minute data. {index.source}.
+          history. Switching timeframe holds the same moment. {index.source}.
         </p>
+      </div>
+
+      {logging && (
+        <LogModal
+          user={user}
+          pair={LABELS[symbol] || symbol}
+          tf={tfId}
+          when={clockDate}
+          startedAt={startRef.current}
+          onClose={() => setLogging(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Writes the replayed trade into the student's journal as a backtest entry,
+// with the pair, date and session already filled from the chart.
+function LogModal({ user, pair, tf, when, startedAt, onClose }) {
+  const [direction, setDirection] = useState('long');
+  const [outcome, setOutcome] = useState('win');
+  const [rr, setRr] = useState('');
+  const [pct, setPct] = useState('');
+  const [model, setModel] = useState(MODELS[0]);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [fail, setFail] = useState(null);
+
+  // Backtest trades belong to a session — that is what the homework gate counts,
+  // so a replay logged without one would never show up against their target.
+  const [sessions, setSessions] = useState(null);
+  const [sessionId, setSessionId] = useState('new');
+  const [newName, setNewName] = useState(
+    `Replay — ${pair} ${when ? when.toISOString().slice(0, 10) : ''}`.trim(),
+  );
+
+  const level = JOURNAL_LEVELS.find((l) => (user?.levels || []).includes(l));
+  const killzone = when ? killzoneFor(when) : '';
+
+  useEffect(() => {
+    call('sessions_list', { user_id: user.id })
+      .then((d) => {
+        const open = (d.sessions || []).filter((s) => s.status !== 'completed');
+        setSessions(open);
+        if (open.length) setSessionId(open[0].id);
+      })
+      .catch(() => setSessions([]));
+  }, [user.id]);
+
+  async function save() {
+    setBusy(true); setFail(null);
+    try {
+      let sid = sessionId;
+      if (sid === 'new') {
+        const name = newName.trim() || `Replay — ${pair}`;
+        const r = await call('session_save', {
+          user_id: user.id,
+          session: { name, instrument: pair, level },
+        });
+        sid = r?.session?.id;
+      }
+      await call('journal_save', {
+        user_id: user.id,
+        entry: {
+          pair,
+          direction,
+          outcome,
+          rr: rr === '' ? null : Number(rr),
+          pct: pct === '' ? null : Number(pct),
+          model,
+          killzone,
+          notes: notes.trim(),
+          trade_date: when ? when.getTime() : Date.now(),
+          trade_type: 'backtest',
+          session_id: sid || null,
+          level,
+          confluences: [],
+        },
+      });
+      setDone(true);
+    } catch (e) {
+      setFail(String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const opt = (active) => ({
+    border: `1px solid ${active ? 'var(--gold)' : 'var(--line)'}`,
+    background: active ? 'var(--gold)' : 'transparent',
+    color: active ? '#fff' : 'var(--ink-soft)',
+    borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: active ? 600 : 500,
+  });
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 className="serif">Log this backtest</h3>
+
+        {done ? (
+          <>
+            <div className="notice info" style={{ marginTop: 10 }}>
+              Saved to your journal as a backtest on <b>{pair}</b>. It counts toward your
+              logged backtests and shows up in your stats.
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={onClose}>Done</button>
+            </div>
+          </>
+        ) : !level ? (
+          <>
+            <div className="notice" style={{ marginTop: 10 }}>
+              Your account has no mentorship stage with a journal attached, so there's
+              nowhere to save this yet.
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={onClose}>Close</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{
+              fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4, marginBottom: 14,
+              display: 'flex', gap: 14, flexWrap: 'wrap',
+            }}>
+              <span><b>{pair}</b> · {tf}</span>
+              <span>{when ? when.toISOString().replace('T', ' ').slice(0, 16) : '—'} SAST</span>
+              {killzone && <span>{killzone} session</span>}
+            </div>
+
+            <div className="field">
+              <label>Backtest session</label>
+              {sessions === null ? (
+                <div style={{ fontSize: 12.5, color: 'var(--ink-faint)' }}>Loading your sessions…</div>
+              ) : (
+                <select value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}{s.instrument ? ` · ${s.instrument}` : ''}</option>
+                  ))}
+                  <option value="new">+ New session…</option>
+                </select>
+              )}
+            </div>
+
+            {sessionId === 'new' && (
+              <div className="field">
+                <label>Name the session</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} />
+              </div>
+            )}
+
+            <div className="field">
+              <label>Direction</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button style={opt(direction === 'long')} onClick={() => setDirection('long')}>▲ Long</button>
+                <button style={opt(direction === 'short')} onClick={() => setDirection('short')}>▼ Short</button>
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Result</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {['win', 'loss', 'be'].map((o) => (
+                  <button key={o} style={opt(outcome === o)} onClick={() => setOutcome(o)}>
+                    {o === 'win' ? 'Win' : o === 'loss' ? 'Loss' : 'Break even'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>RR (1 : ?)</label>
+                <input value={rr} onChange={(e) => setRr(e.target.value)} placeholder="2.5" inputMode="decimal" />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Result %</label>
+                <input value={pct} onChange={(e) => setPct(e.target.value)} placeholder="1.2" inputMode="decimal" />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Model</label>
+              <select value={model} onChange={(e) => setModel(e.target.value)}>
+                {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Notes — what did you read, and what actually happened?</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Bias, entry trigger, where it went against you…" />
+            </div>
+
+            {fail && <div className="notice" style={{ marginBottom: 10 }}>Couldn't save: {fail}</div>}
+
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={onClose}>Cancel</button>
+              <button className="btn" onClick={save} disabled={busy}>
+                {busy ? 'Saving…' : 'Save to journal'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
