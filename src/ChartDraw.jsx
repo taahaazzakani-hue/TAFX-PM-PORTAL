@@ -432,54 +432,49 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   }
 
   // ---- repaint triggers --------------------------------------------------
-  // Follow the chart as it pans and zooms.
+  // Watch the chart's own geometry, every frame, and redraw the moment any of
+  // it moves.
   //
-  // This has to wait for the chart to exist: React runs a child's effects
-  // before its parent's, so on the first pass the chart has not been created
-  // yet and a plain `if (!chart) return` subscribed to nothing and was never
-  // asked again — which is why drawings used to sit still while the candles
-  // slid underneath them.
+  // Listening for the bar range to change is not enough. Dragging the price
+  // axis zooms the chart vertically without touching the bar range at all, so
+  // no event fires, and the drawings stayed put while the candles moved under
+  // them — about 23px out after one drag. Autoscale refitting and the chart
+  // settling a frame after it announces a change are the same problem in
+  // smaller doses.
+  //
+  // So instead of guessing which events matter, read back what the chart will
+  // actually draw with: where the bars start, how wide one bar is, what price
+  // sits at the top of the pane and how big the pane is. Four cheap calls a
+  // frame, and a repaint only when one of them differs — which is also what
+  // keeps the drawings exactly one frame, at most, behind the candles.
   useEffect(() => {
-    let stop = false;
-    let wait = 0;
-    let off = null;
+    let frame = 0;
+    let last = '';
 
-    const attach = () => {
-      if (stop) return;
+    const tick = () => {
+      frame = requestAnimationFrame(tick);
       const chart = chartRef.current;
-      if (!chart) { wait = requestAnimationFrame(attach); return; }
-      const ts = chart.timeScale();
-      // Painted twice per gesture frame, on purpose.
-      //
-      // Zooming moves both axes, and they do not settle together: the chart
-      // tells us the bar range has changed before it has re-fitted the price
-      // scale to the candles now in view. Painting only on the event leaves a
-      // frame drawn against the old price scale, and painting only on the next
-      // frame leaves one drawn against the old bar range — either way a
-      // drawing jumps and then corrects itself, which is the flicker. So paint
-      // now for the bar range, and again next frame once the price scale has
-      // caught up.
-      let follow = 0;
-      const onRange = () => {
+      const series = seriesRef.current;
+      if (!chart || !series) return;
+      try {
+        const ts = chart.timeScale();
+        const r = ts.getVisibleLogicalRange();
+        if (!r) return;
+        const base = Math.round(r.from);
+        const c0 = ts.logicalToCoordinate(base);
+        const c1 = ts.logicalToCoordinate(base + 1);
+        const top = series.coordinateToPrice(10);
+        const pane = chart.paneSize();
+        const sig = `${r.from}|${r.to}|${c0}|${c1}|${top}|${pane.width}x${pane.height}`;
+        if (sig === last) return;
+        last = sig;
         paint();
-        if (follow) return;
-        follow = requestAnimationFrame(() => { follow = 0; paint(); });
-      };
-      ts.subscribeVisibleLogicalRangeChange(onRange);
-      off = () => {
-        if (follow) cancelAnimationFrame(follow);
-        try { ts.unsubscribeVisibleLogicalRangeChange(onRange); } catch { /* chart already gone */ }
-      };
-      paint();
+      } catch { /* chart torn down between frames */ }
     };
-    attach();
 
-    return () => {
-      stop = true;
-      cancelAnimationFrame(wait);
-      if (off) off();
-    };
-  }, [chartRef, paint, version]);
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [chartRef, seriesRef, paint]);
 
   // Anything that changes the size of the box has to be measured after the
   // chart itself has re-laid-out, or the drawings land against the old
