@@ -11,7 +11,8 @@ import { callGates } from './api.js';
 import Profile from './Profile.jsx';
 import RiskCalculator from './RiskCalculator.jsx';
 import Charts from './Charts.jsx';
-import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag, IcChart } from './Icons.jsx';
+import Replay from './Replay.jsx';
+import { IcGrid, IcBook, IcGem, IcJournal, IcClipboard, IcPercent, IcUser, IcSearch, IcChevron, IcTrophy, IcCalendar, IcTag, IcChart, IcVideo } from './Icons.jsx';
 import Leaderboard from './Leaderboard.jsx';
 import { StripeCheckoutModal, STRIPE_PLANS } from './StripeCheckout.jsx';
 import { WorkspaceLoading } from './PortalMotion.jsx';
@@ -294,6 +295,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
             </div>
           )}
           {canSeeCharts && <NavItem id="charts" icon={<IcChart />} label="Live Charts" />}
+          {canSeeCharts && <NavItem id="replay" icon={<IcVideo />} label="Bar Replay" />}
           {hasJournal && <NavItem id="journal" icon={<IcJournal />} label="Journal" />}
           {hasJournal && <NavItem id="leaderboard" icon={<IcTrophy />} label="Student Leaderboard" />}
           {hasHomework && <NavItem id="homework" icon={<IcClipboard />} label="Homework" />}
@@ -315,7 +317,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
       <main className="main">
         <div className="topbar">
           <button className="burger" onClick={() => setNavOpen(true)}>☰</button>
-          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Student Leaderboard' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : view === 'bookings' ? 'Book a 1v1' : view === 'charts' ? 'Live Charts' : view === 'broker' ? 'Recommended Broker' : 'Profile'}</h2>
+          <h2>{view === 'dashboard' ? 'Home' : view === 'pm' ? 'Private Mentorship' : view === 'learn' ? (activeVideo ? 'Lesson' : course?.title || 'Learning') : view === 'leaderboard' ? 'Student Leaderboard' : view === 'journal' ? 'Trading Journal' : view === 'homework' ? 'Homework' : view === 'calculator' ? 'Risk Management' : view === 'bookings' ? 'Book a 1v1' : view === 'charts' ? 'Live Charts' : view === 'replay' ? 'Bar Replay' : view === 'broker' ? 'Recommended Broker' : 'Profile'}</h2>
         </div>
         <div className="content">
           <BillingNotice billing={user.billing} user={user} />
@@ -332,6 +334,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
           {view === 'charts' && canSeeCharts && <Charts />}
+          {view === 'replay' && canSeeCharts && <Replay />}
           {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}
           {view === 'profile' && <Profile user={user} initialNotice={discordReturn} onUpdated={(u) => { const merged = { ...user, ...u }; setUser(merged); onUpdated && onUpdated(merged); }} />}
