@@ -96,6 +96,8 @@ export default function Replay({ user }) {
   const hoverRef = useRef(null);
   const [hover, setHover] = useState(null);
   const startRef = useRef(null);          // where this replay began
+  const keepRangeRef = useRef(null);      // visible window to carry across a timeframe change
+  const tfIdRef = useRef('M15');
 
   const offset = index?.server_gmt_offset_seconds ?? 0;
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[4];
@@ -107,6 +109,7 @@ export default function Replay({ user }) {
     if (!picking) { hoverRef.current = null; setHover(null); }
   }, [picking]);
   useEffect(() => { barsRef.current = bars; }, [bars]);
+  useEffect(() => { tfIdRef.current = tfId; }, [tfId]);
 
   useEffect(() => {
     loadIndex().then(setIndex).catch((e) => setErr(String(e.message || e)));
@@ -161,7 +164,14 @@ export default function Replay({ user }) {
       grid: { vertLines: { color: look.grid }, horzLines: { color: look.grid } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: look.border },
-      timeScale: { borderColor: look.border, timeVisible: true, secondsVisible: false },
+      // minBarSpacing defaults to 0.5px, which quietly refuses to show four
+      // days of M1 on one screen — and that refusal is what stopped the view
+      // from following a timeframe change. TradingView will happily squeeze
+      // candles to a hair, so allow it.
+      timeScale: {
+        borderColor: look.border, timeVisible: true, secondsVisible: false,
+        minBarSpacing: 0.05,
+      },
     });
     const series = chart.addCandlestickSeries({
       upColor, downColor, borderUpColor: upColor, borderDownColor: downColor,
@@ -193,6 +203,8 @@ export default function Replay({ user }) {
 
     chartRef.current = chart;
     seriesRef.current = series;
+    // a handle for the browser tests; inert unless the flag is set by hand
+    if (typeof window !== 'undefined' && window.__TAFX_DEBUG) window.__tafxChart = chart;
     return () => { chart.remove(); chartRef.current = null; seriesRef.current = null; };
     // deliberately NOT keyed on theme: rebuilding the chart would drop the
     // series data with it and leave an empty pane
@@ -226,7 +238,28 @@ export default function Replay({ user }) {
       return;
     }
     const end = shown === null ? bars.length : shown;
-    s.setData(bars.slice(0, end).map((b) => ({ ...b, time: b.time + offset })));
+    const data = bars.slice(0, end).map((b) => ({ ...b, time: b.time + offset }));
+    s.setData(data);
+
+    // Carry the window across a timeframe change, the way TradingView does.
+    // Without this the chart keeps showing the same NUMBER of bars, so an
+    // M15 screen of two days becomes two hours on M1 — and a zone drawn over
+    // those two days then fills the screen, which looked like the drawing had
+    // grown rather than the view having zoomed in on it.
+    // Read the timeframe from a ref, not the dependency list: keyed on tfId
+    // this effect would also fire on the render between the click and the new
+    // candles arriving, and spend the saved window on the old data.
+    const keep = keepRangeRef.current;
+    if (keep && keep.tf === tfIdRef.current && data.length > 1) {
+      keepRangeRef.current = null;
+      const lo = data[0].time;
+      const hi = data[data.length - 1].time;
+      const from = Math.max(lo, Math.min(hi, keep.from));
+      const to = Math.max(lo, Math.min(hi, keep.to));
+      if (to > from) {
+        try { chartRef.current?.timeScale().setVisibleRange({ from, to }); } catch { /* range outside the data, leave the default */ }
+      }
+    }
   }, [bars, shown, offset, picking, hover]);
 
   useEffect(() => {
@@ -258,6 +291,15 @@ export default function Replay({ user }) {
   const toggleFs = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else wrapRef.current?.requestFullscreen?.();
+  };
+
+  // Remember what slice of history is on screen, so the new timeframe opens
+  // on the same dates rather than on the same bar count.
+  const changeTf = (id) => {
+    if (id === tfId) return;
+    const r = chartRef.current?.timeScale().getVisibleRange();
+    keepRangeRef.current = r ? { from: Number(r.from), to: Number(r.to), tf: id } : null;
+    setTfId(id);
   };
 
   const step = (n) => { setPlaying(false); setShown((v) => Math.min(bars.length, (v ?? bars.length) + n)); };
@@ -332,7 +374,7 @@ export default function Replay({ user }) {
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
           {TIMEFRAMES.map((t) => (
-            <button key={t.id} onClick={() => setTfId(t.id)} style={chip(t.id === tfId)}>{t.id}</button>
+            <button key={t.id} onClick={() => changeTf(t.id)} style={chip(t.id === tfId)}>{t.id}</button>
           ))}
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <button onClick={() => setTheme('light')} style={chip(theme === 'light')}>Light</button>
