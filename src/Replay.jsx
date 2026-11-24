@@ -25,6 +25,18 @@ const SPEEDS = [
 const INITIAL_MONTHS = 12;   // opened on load
 const MAX_BARS = 60000;      // kept on the chart; plenty of scrollback
 
+// candles that would be cut off, shown while choosing the replay point
+const GREY = '#b9c4d0';
+const GREY_WICK = '#cbd4de';
+
+// scissors, so the cursor says what the click will do
+const SCISSORS =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' " +
+  "viewBox='0 0 24 24' fill='none' stroke='%23172535' stroke-width='1.8' stroke-linecap='round'>" +
+  "<circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/>" +
+  "<line x1='20' y1='4' x2='8.1' y2='15.9'/><line x1='14.5' y1='14.5' x2='20' y2='20'/>" +
+  "<line x1='8.1' y1='8.1' x2='12' y2='12'/></svg>\") 12 12, crosshair";
+
 export default function Replay() {
   const [index, setIndex] = useState(null);
   const [err, setErr] = useState(null);
@@ -54,12 +66,17 @@ export default function Replay() {
   const cursorRef = useRef(null);     // timestamp at the end of the last revealed bar
   const pickingRef = useRef(false);
   const barsRef = useRef([]);
+  const hoverRef = useRef(null);
+  const [hover, setHover] = useState(null);   // bar time under the cursor while picking
 
   const offset = index?.server_gmt_offset_seconds ?? 0;
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[4];
   const inReplay = shown !== null;
 
-  useEffect(() => { pickingRef.current = picking; }, [picking]);
+  useEffect(() => {
+    pickingRef.current = picking;
+    if (!picking) { hoverRef.current = null; setHover(null); }
+  }, [picking]);
   useEffect(() => { barsRef.current = bars; }, [bars]);
 
   useEffect(() => {
@@ -125,6 +142,14 @@ export default function Replay() {
       wickUpColor: upColor, wickDownColor: downColor,
     });
 
+    // while armed, hovering greys out everything that would be cut off, so the
+    // student sees exactly what they are about to hide before committing
+    chart.subscribeCrosshairMove((param) => {
+      if (!pickingRef.current) { if (hoverRef.current !== null) { hoverRef.current = null; setHover(null); } return; }
+      const t = param.time == null ? null : Number(param.time) - offset;
+      if (t !== hoverRef.current) { hoverRef.current = t; setHover(t); }
+    });
+
     // clicking the chart while armed chooses where replay begins
     chart.subscribeClick((param) => {
       if (!pickingRef.current || param.time == null) return;
@@ -152,13 +177,26 @@ export default function Replay() {
     });
   }, [upColor, downColor]);
 
-  // feed the chart: everything when live, only the revealed part in replay
+  // Feed the chart: everything when live, only the revealed part in replay.
+  // While picking, bars past the cursor stay on screen but go grey — the same
+  // "this is what you're cutting" preview TradingView shows.
   useEffect(() => {
     const s = seriesRef.current;
     if (!s || !bars.length) return;
+
+    if (picking && hover != null) {
+      s.setData(bars.map((b) => (b.time <= hover
+        ? { ...b, time: b.time + offset }
+        : {
+            ...b, time: b.time + offset,
+            color: GREY, borderColor: GREY, wickColor: GREY_WICK,
+          })));
+      return;
+    }
+
     const end = shown === null ? bars.length : shown;
     s.setData(bars.slice(0, end).map((b) => ({ ...b, time: b.time + offset })));
-  }, [bars, shown, offset]);
+  }, [bars, shown, offset, picking, hover]);
 
   // keep the cursor at the END of the last revealed bar
   useEffect(() => {
@@ -279,13 +317,16 @@ export default function Replay() {
             outline: picking ? '2px solid var(--gold)' : 'none',
           }}
         >
-          <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? 'crosshair' : 'default' }} />
+          <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? SCISSORS : 'default' }} />
 
           {picking && (
             <div style={{
               position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
               background: 'var(--gold)', color: '#fff', padding: '7px 14px',
               borderRadius: 999, fontSize: 12.5, fontWeight: 600, pointerEvents: 'none',
+              // the chart library gives its canvases a stacking order of their
+              // own, so anything laid over them needs an explicit one
+              zIndex: 5,
             }}>
               Click the candle you want to start from
             </div>
@@ -295,6 +336,7 @@ export default function Replay() {
             <div style={{
               position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
               background: 'rgba(255,255,255,.75)', fontSize: 13, color: 'var(--ink-soft)',
+              zIndex: 5,
             }}>
               Loading candles…
             </div>
