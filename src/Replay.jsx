@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, CrosshairMode } from 'lightweight-charts';
 import { loadIndex, loadRecent, aggregate, TIMEFRAMES } from './replayData.js';
 import { call } from './api.js';
+import DrawLayer, { ToolRail } from './ChartDraw.jsx';
 
 // Bar replay, laid out like the Live Charts page so the two feel like one tool.
 // The chart opens on the most recent price; replay only begins where the
@@ -81,6 +82,9 @@ export default function Replay({ user }) {
   const [speed, setSpeed] = useState(5);
   const [fs, setFs] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [tool, setTool] = useState('cursor');
+  const [drawings, setDrawings] = useState([]);
+  const [drawColor, setDrawColor] = useState('#245bb2');
 
   const hostRef = useRef(null);
   const wrapRef = useRef(null);
@@ -128,6 +132,7 @@ export default function Replay({ user }) {
   useEffect(() => {
     if (!index) return;
     setShown(null); setPlaying(false); setPicking(false);
+    setDrawings([]); setTool('cursor');
     cursorRef.current = null; startRef.current = null;
     load(symbol, INITIAL_MONTHS);
   }, [index, symbol, load]);
@@ -270,6 +275,14 @@ export default function Replay({ user }) {
     startRef.current = bars[n - 1]?.time ?? null;
   };
 
+  // the exact times currently plotted, so drawings can snap onto them
+  const chartTimes = React.useMemo(() => {
+    const end = shown === null ? bars.length : shown;
+    const out = new Array(end);
+    for (let i = 0; i < end; i++) out[i] = bars[i].time + offset;
+    return out;
+  }, [bars, shown, offset]);
+
   const atEnd = shown !== null && shown >= bars.length;
   const current = bars[(shown === null ? bars.length : shown) - 1];
   const clockDate = current ? new Date((current.time + offset) * 1000) : null;
@@ -341,6 +354,26 @@ export default function Replay({ user }) {
           }}
         >
           <div ref={hostRef} style={{ height: '100%', width: '100%', cursor: picking ? SCISSORS : 'default' }} />
+
+          {!picking && (
+            <>
+              <DrawLayer
+                chartRef={chartRef} seriesRef={seriesRef}
+                tool={tool} setTool={setTool}
+                drawings={drawings} setDrawings={setDrawings}
+                color={drawColor}
+                version={`${tfId}:${bars.length}:${shown}:${theme}`}
+                times={chartTimes}
+              />
+              <ToolRail
+                tool={tool} setTool={setTool}
+                color={drawColor} setColor={setDrawColor}
+                count={drawings.length}
+                onUndo={() => setDrawings((d) => d.slice(0, -1))}
+                onClear={() => setDrawings([])}
+              />
+            </>
+          )}
 
           {picking && (
             <div style={{
