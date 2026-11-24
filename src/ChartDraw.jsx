@@ -27,7 +27,16 @@ export const TOOLS = [
   { id: 'trend', label: 'Trendline', hint: 'Trendline — drag from A to B' },
   { id: 'ray', label: 'Ray', hint: 'Horizontal ray — drag from a candle' },
   { id: 'rect', label: 'Zone', hint: 'Rectangle — drag a box' },
+  { id: 'long', label: 'Long position', hint: 'Long position — drag from your entry' },
+  { id: 'short', label: 'Short position', hint: 'Short position — drag from your entry' },
 ];
+
+// Which way the target sits from the entry.
+const DIR = { long: 1, short: -1 };
+export const POSITION_TOOLS = ['long', 'short'];
+
+const PROFIT = '#1f9d6b';
+const LOSS = '#c2524c';
 
 function icon(id) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' };
@@ -42,6 +51,16 @@ function icon(id) {
       return <><line x1="4" y1="12" x2="21" y2="12" {...common} /><circle cx="4" cy="12" r="1.8" {...common} /></>;
     case 'rect':
       return <><rect x="4" y="7" width="16" height="10" rx="1.5" {...common} /></>;
+    case 'long':
+      return <>
+        <rect x="4" y="5" width="16" height="7" rx="1" fill="rgba(31,157,107,.22)" stroke="#1f9d6b" strokeWidth="1.4" />
+        <rect x="4" y="12" width="16" height="7" rx="1" fill="rgba(194,82,76,.18)" stroke="#c2524c" strokeWidth="1.4" />
+      </>;
+    case 'short':
+      return <>
+        <rect x="4" y="5" width="16" height="7" rx="1" fill="rgba(194,82,76,.18)" stroke="#c2524c" strokeWidth="1.4" />
+        <rect x="4" y="12" width="16" height="7" rx="1" fill="rgba(31,157,107,.22)" stroke="#1f9d6b" strokeWidth="1.4" />
+      </>;
     default:
       return null;
   }
@@ -232,6 +251,19 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
       const a = project(d.t1, d.price);
       return a ? { kind: 'ray', a } : null;
     }
+    if (d.type === 'long' || d.type === 'short') {
+      const x1 = project(d.t1, d.entry);
+      const x2 = project(d.t2, d.entry);
+      if (!x1 || !x2) return null;
+      const stopY = series.priceToCoordinate(d.stop);
+      const targetY = series.priceToCoordinate(d.target);
+      if (stopY == null || targetY == null) return null;
+      return {
+        kind: 'position', side: d.type,
+        left: Math.min(x1.x, x2.x), right: Math.max(x1.x, x2.x),
+        entryY: x1.y, stopY, targetY,
+      };
+    }
     const a = project(d.t1, d.p1);
     const b = project(d.t2, d.p2);
     return a && b ? { kind: d.type, a, b } : null;
@@ -243,7 +275,7 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   // position it had is kept and reused instead. The signature makes sure it is
   // the same drawing being redrawn and not whatever now sits at that index.
   const lastGeom = useRef(new Map());
-  const sigOf = (d) => `${d.type}|${d.t1}|${d.t2}|${d.p1}|${d.p2}|${d.price}`;
+  const sigOf = (d) => `${d.type}|${d.t1}|${d.t2}|${d.p1}|${d.p2}|${d.price}|${d.entry}|${d.stop}|${d.target}`;
 
   const steadyGeom = useCallback((d, key) => {
     const g = geomOf(d);
@@ -264,6 +296,18 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     if (g.kind === 'ray') {
       if (dist(px, py, g.a.x, g.a.y) <= GRAB) return 'a';
       return (Math.abs(py - g.a.y) <= HIT && px >= g.a.x - HIT) ? 'body' : null;
+    }
+    if (g.kind === 'position') {
+      const { left, right, entryY, stopY, targetY } = g;
+      if (px < left - HIT || px > right + GRAB) return null;
+      // the levels first, so grabbing one never moves the whole position
+      if (Math.abs(py - stopY) <= HIT) return 'stop';
+      if (Math.abs(py - targetY) <= HIT) return 'target';
+      if (Math.abs(py - entryY) <= HIT) return 'entry';
+      if (Math.abs(px - right) <= GRAB) return 'right';
+      const top = Math.min(stopY, targetY);
+      const bot = Math.max(stopY, targetY);
+      return (py >= top && py <= bot) ? 'body' : null;
     }
     const { a, b } = g;
     if (g.kind === 'trend') {
@@ -312,6 +356,17 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     const dL = (cur.l != null && start.l != null) ? cur.l - start.l : 0;
     const dP = cur.price - start.price;
 
+    if (d.type === 'long' || d.type === 'short') {
+      if (part === 'stop') { d.stop = cur.price; return d; }
+      if (part === 'target') { d.target = cur.price; return d; }
+      if (part === 'right') { d.t2 = cur.time; return d; }
+      // entry or body: the whole position travels, keeping its risk and reward
+      d.entry = d0.entry + dP;
+      d.stop = d0.stop + dP;
+      d.target = d0.target + dP;
+      if (part === 'body') { d.t1 = shiftTime(d0.t1, dL); d.t2 = shiftTime(d0.t2, dL); }
+      return d;
+    }
     if (d.type === 'hline') { d.price = d0.price + dP; return d; }
     if (d.type === 'ray') {
       if (part === 'a') { d.t1 = cur.time; d.price = cur.price; } else { d.t1 = shiftTime(d0.t1, dL); d.price = d0.price + dP; }
@@ -387,6 +442,8 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
       } else if (g.kind === 'trend') {
         ctx.beginPath(); ctx.moveTo(g.a.x, g.a.y); ctx.lineTo(g.b.x, g.b.y); ctx.stroke();
         dot(ctx, g.a.x, g.a.y); dot(ctx, g.b.x, g.b.y);
+      } else if (g.kind === 'position') {
+        drawPosition(ctx, g, d, on, pw);
       } else if (g.kind === 'rect') {
         const x = Math.min(g.a.x, g.b.x); const y = Math.min(g.a.y, g.b.y);
         const rw = Math.abs(g.b.x - g.a.x); const rh = Math.abs(g.b.y - g.a.y);
@@ -415,13 +472,96 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     ctx.fillText(text, w - tw + 3, y + 4);
     ctx.fillStyle = col;
   }
+  // A position: the reward block from entry to target, the risk block from
+  // entry to stop, and the numbers a trader actually reads off it — the reward
+  // to risk ratio, and how far each leg is in both price and percent.
+  function drawPosition(ctx, g, d, on, paneW) {
+    const { left, right, entryY, stopY, targetY } = g;
+    const w = Math.max(1, right - left);
+
+    const block = (yFrom, yTo, fill, line) => {
+      const top = Math.min(yFrom, yTo);
+      const h = Math.abs(yTo - yFrom);
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = fill;
+      ctx.fillRect(left, top, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = line;
+      ctx.lineWidth = on ? 1.8 : 1.2;
+      ctx.strokeRect(left, top, w, h);
+    };
+
+    block(entryY, targetY, PROFIT, PROFIT);
+    block(entryY, stopY, LOSS, LOSS);
+
+    // entry, drawn last so it sits on top of both blocks
+    ctx.strokeStyle = d.color || colorRef.current;
+    ctx.lineWidth = on ? 2.2 : 1.6;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(left, entryY); ctx.lineTo(right, entryY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const risk = Math.abs(d.entry - d.stop);
+    const reward = Math.abs(d.target - d.entry);
+    const rr = risk > 0 ? reward / risk : 0;
+    const pc = (v) => (d.entry ? `${((v / d.entry) * 100).toFixed(2)}%` : '');
+
+    // Labels live inside the box. A narrow position gets a shorter form rather
+    // than text trailing across the candles, and a flat one gets none at all.
+    fitTag(ctx, left + 6, (entryY + targetY) / 2, [
+      `Target ${fmt(d.target)}  +${fmt(reward)} (${pc(reward)})`,
+      `${fmt(d.target)}  ${pc(reward)}`,
+      pc(reward),
+    ], PROFIT, w - 12, Math.abs(targetY - entryY));
+
+    fitTag(ctx, left + 6, (entryY + stopY) / 2, [
+      `Stop ${fmt(d.stop)}  −${fmt(risk)} (${pc(risk)})`,
+      `${fmt(d.stop)}  ${pc(risk)}`,
+      pc(risk),
+    ], LOSS, w - 12, Math.abs(stopY - entryY));
+
+    // the ratio where the eye lands: against the right edge of the position
+    const head = `${d.type === 'long' ? 'Long' : 'Short'}  ${rr ? `${rr.toFixed(2)}R` : ''}`.trim();
+    tag(ctx, Math.min(right + 8, paneW - 120), entryY, head, d.color || colorRef.current, true);
+  }
+
+  function fmt(v) {
+    const n = Math.abs(v);
+    const dp = n >= 100 ? 2 : n >= 1 ? 3 : 5;
+    return v.toFixed(dp).replace(/\.?0+$/, '');
+  }
+
+  // The first of these labels that fits the space, or nothing.
+  function fitTag(ctx, x, y, variants, col, maxW, maxH) {
+    if (maxH < 20) return;
+    ctx.font = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    for (const text of variants) {
+      if (ctx.measureText(text).width + 12 <= maxW) { tag(ctx, x, y, text, col); return; }
+    }
+  }
+
+  // A small filled label. Positions carry several, so they share one helper.
+  function tag(ctx, x, y, text, col, solid = false) {
+    ctx.font = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace';
+    const w = ctx.measureText(text).width + 12;
+    ctx.globalAlpha = solid ? 0.95 : 0.88;
+    ctx.fillStyle = col;
+    ctx.fillRect(x, y - 9, w, 18);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, x + 6, y + 4);
+  }
+
   // Hollow squares at every point you can grab, the way TradingView marks a
   // selected drawing.
   function handles(ctx, g, col) {
     const pts = g.kind === 'hline' ? []
       : g.kind === 'ray' ? [g.a]
         : g.kind === 'trend' ? [g.a, g.b]
-          : [g.a, g.b, { x: g.b.x, y: g.a.y }, { x: g.a.x, y: g.b.y }];
+          : g.kind === 'position' ? [
+            { x: g.right, y: g.entryY }, { x: g.right, y: g.stopY }, { x: g.right, y: g.targetY },
+          ]
+            : [g.a, g.b, { x: g.b.x, y: g.a.y }, { x: g.a.x, y: g.b.y }];
     ctx.lineWidth = 1.4;
     for (const p of pts) {
       ctx.fillStyle = '#fff';
@@ -668,16 +808,49 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
       setTool('cursor');
       return;
     }
+    if (tool === 'long' || tool === 'short') {
+      // Risk sized off what is on screen, so the box is readable at any zoom
+      // and on any instrument — a fixed number of points would be invisible on
+      // gold and absurd on an index. Two to one, the way TradingView opens.
+      const span = visiblePriceSpan();
+      const risk = span ? span * 0.06 : Math.abs(p.price) * 0.002;
+      const way = DIR[tool];
+      pendingRef.current = {
+        type: tool, t1: p.time, t2: p.time, color,
+        entry: p.price,
+        stop: p.price - way * risk,
+        target: p.price + way * risk * 2,
+      };
+      paint();
+      return;
+    }
+
     pendingRef.current = { type: tool, t1: p.time, p1: p.price, t2: p.time, p2: p.price, color };
     paint();
   };
 
+  // Top to bottom of the price axis as it currently stands.
+  const visiblePriceSpan = useCallback(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return 0;
+    try {
+      const h = chart.paneSize().height;
+      const top = series.coordinateToPrice(0);
+      const bottom = series.coordinateToPrice(h);
+      if (top == null || bottom == null) return 0;
+      return Math.abs(top - bottom);
+    } catch { return 0; }
+  }, [chartRef, seriesRef]);
+
   const onMove = (ev) => {
-    if (!pendingRef.current) return;
+    const pend = pendingRef.current;
+    if (!pend) return;
     const p = pointAt(ev);
     if (!p) return;
-    pendingRef.current.t2 = p.time;
-    pendingRef.current.p2 = p.price;
+    pend.t2 = p.time;
+    // a position keeps the entry it was started at; only its width follows
+    if (pend.type !== 'long' && pend.type !== 'short') pend.p2 = p.price;
     paint();
   };
 
@@ -685,6 +858,21 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
     const d = pendingRef.current;
     pendingRef.current = null;
     if (!d) return;
+
+    if (d.type === 'long' || d.type === 'short') {
+      // A click with no drag is a position of a sensible default width rather
+      // than nothing at all, which is what TradingView gives you.
+      const bars = timesRef.current;
+      if (Math.abs(d.t2 - d.t1) < 1 && bars.length > 1) {
+        const step = bars[bars.length - 1] - bars[bars.length - 2];
+        d.t2 = d.t1 + step * 30;
+      }
+      if (d.t2 < d.t1) { const t = d.t1; d.t1 = d.t2; d.t2 = t; }
+      setDrawings((prev) => [...prev, d]);
+      setTool('cursor');
+      return;
+    }
+
     // ignore an accidental click that didn't drag anywhere
     if (d.t1 === d.t2 && d.p1 === d.p2) { paint(); return; }
     setDrawings((prev) => [...prev, d]);
@@ -694,8 +882,11 @@ export default function DrawLayer({ chartRef, seriesRef, tool, setTool, drawings
   const armed = tool !== 'cursor';
   const grabbing = !!hot;
   const cursorFor = armed ? 'crosshair'
-    : hot ? (hot.part === 'body' ? 'move' : 'pointer')
-      : 'default';
+    : !hot ? 'default'
+      : hot.part === 'body' ? 'move'
+        : (hot.part === 'stop' || hot.part === 'target' || hot.part === 'entry') ? 'ns-resize'
+          : hot.part === 'right' ? 'ew-resize'
+            : 'pointer';
 
   return (
     <canvas

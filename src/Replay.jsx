@@ -369,6 +369,20 @@ export default function Replay({ user }) {
     startRef.current = bars[n - 1]?.time ?? null;
   };
 
+  // The most recent long/short box on the chart. If a student has planned the
+  // trade with the position tool, the journal should not make them retype its
+  // direction and R — the numbers are already on the screen.
+  const plan = React.useMemo(() => {
+    for (let i = drawings.length - 1; i >= 0; i--) {
+      const d = drawings[i];
+      if (d.type !== 'long' && d.type !== 'short') continue;
+      const risk = Math.abs(d.entry - d.stop);
+      const reward = Math.abs(d.target - d.entry);
+      return { direction: d.type, rr: risk > 0 ? Math.round((reward / risk) * 100) / 100 : null };
+    }
+    return null;
+  }, [drawings]);
+
   // the exact times currently plotted, so drawings can snap onto them
   const chartTimes = React.useMemo(() => {
     const end = shown === null ? bars.length : shown;
@@ -628,6 +642,7 @@ export default function Replay({ user }) {
             when={clockDate}
             startedAt={startRef.current}
             shot={shot}
+            plan={plan}
             onClose={() => { setLogging(false); setShot(null); }}
           />
         )}
@@ -652,10 +667,10 @@ export default function Replay({ user }) {
 
 // Writes the replayed trade into the student's journal as a backtest entry,
 // with the pair, date and session already filled from the chart.
-function LogModal({ user, pair, tf, when, startedAt, shot, onClose }) {
-  const [direction, setDirection] = useState('long');
+function LogModal({ user, pair, tf, when, startedAt, shot, plan, onClose }) {
+  const [direction, setDirection] = useState(plan?.direction || 'long');
   const [outcome, setOutcome] = useState('win');
-  const [rr, setRr] = useState('');
+  const [rr, setRr] = useState(plan?.rr != null ? String(plan.rr) : '');
   const [pct, setPct] = useState('');
   const [model, setModel] = useState(MODELS[0]);
   const [notes, setNotes] = useState('');
