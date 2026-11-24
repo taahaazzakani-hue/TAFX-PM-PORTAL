@@ -333,7 +333,7 @@ export default function Portal({ user: initialUser, onLogout, onUpdated }) {
           {view === 'leaderboard' && hasJournal && <Leaderboard user={user} />}
           {view === 'homework' && <Homework user={user} />}
           {view === 'calculator' && <RiskCalculator />}
-          {view === 'charts' && canSeeCharts && <Charts />}
+          {view === 'charts' && canSeeCharts && <Charts user={user} />}
           {view === 'replay' && canSeeCharts && <Replay user={user} />}
           {view === 'bookings' && <Bookings user={user} onLeave={() => setView('dashboard')} />}
           {view === 'broker' && <Broker />}

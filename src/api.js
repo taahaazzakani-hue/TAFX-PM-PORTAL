@@ -9,6 +9,7 @@ const SETTINGS_API = `${SUPABASE_URL}/functions/v1/pm-settings`;
 const INTEREST_API = `${SUPABASE_URL}/functions/v1/pm-interest`;
 const GATES_API = `${SUPABASE_URL}/functions/v1/pm-gates`;
 const SUBS_API = `${SUPABASE_URL}/functions/v1/pm-subs`;
+const WATCHLIST_API = `${SUPABASE_URL}/functions/v1/pm-watchlist`;
 
 // NOTE: Online payment gateways (PayFast/Paystack) were removed. Subscriptions
 // are paid manually by EFT to the mentor; see payinfo.js for the details shown
@@ -43,6 +44,12 @@ export async function callGates(action, body = {}) {
 // student profile to see and cancel a live membership.
 export async function callSubs(action, body = {}) {
   return post(SUBS_API, action, body);
+}
+
+// A student's saved chart list. Its own function, so it can never take the
+// login path down with it.
+export async function callWatchlist(action, body = {}) {
+  return post(WATCHLIST_API, action, body);
 }
 
 async function post(url, action, body) {

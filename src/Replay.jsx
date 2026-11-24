@@ -453,6 +453,20 @@ export default function Replay({ user }) {
             </span>
           </span>
         </div>
+
+        {/* Inside the fullscreen wrapper on purpose: anything rendered outside
+            it is simply not shown while the browser is in fullscreen, so the
+            journal form would open invisibly. */}
+        {logging && (
+          <LogModal
+            user={user}
+            pair={LABELS[symbol] || symbol}
+            tf={tfId}
+            when={clockDate}
+            startedAt={startRef.current}
+            onClose={() => setLogging(false)}
+          />
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
@@ -468,16 +482,6 @@ export default function Replay({ user }) {
         </p>
       </div>
 
-      {logging && (
-        <LogModal
-          user={user}
-          pair={LABELS[symbol] || symbol}
-          tf={tfId}
-          when={clockDate}
-          startedAt={startRef.current}
-          onClose={() => setLogging(false)}
-        />
-      )}
     </div>
   );
 }

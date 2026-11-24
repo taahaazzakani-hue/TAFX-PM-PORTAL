@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { callWatchlist } from './api.js';
 
 // Live charts, powered by the TradingView widget. No API key and no cost:
 // TradingView license the data and permit the embed, which is the same
@@ -8,14 +9,16 @@ import React, { useEffect, useRef, useState } from 'react';
 // markets but will differ from a broker's CFD quotes by small amounts, so
 // the blurb under the tabs says as much rather than letting a student
 // assume their terminal is wrong.
-const INSTRUMENTS = [
-  { id: 'nas100', label: 'USA100', sub: 'US Tech 100', tv: 'OANDA:NAS100USD' },
-  { id: 'gold', label: 'XAUUSD', sub: 'Gold', tv: 'OANDA:XAUUSD' },
-  { id: 'us30', label: 'USA30', sub: 'Wall St 30', tv: 'OANDA:US30USD' },
-  { id: 'ger40', label: 'GER40', sub: 'Germany 40', tv: 'OANDA:DE30EUR' },
-  { id: 'eurusd', label: 'EURUSD', sub: 'Euro', tv: 'OANDA:EURUSD' },
-  { id: 'gbpusd', label: 'GBPUSD', sub: 'Pound', tv: 'OANDA:GBPUSD' },
-  { id: 'usdjpy', label: 'USDJPY', sub: 'Yen', tv: 'OANDA:USDJPY' },
+// What a new student starts with. Once they edit the list it is theirs, saved
+// against their account rather than the browser, so it follows them to a phone.
+const DEFAULT_WATCHLIST = [
+  { label: 'USA100', tv: 'OANDA:NAS100USD' },
+  { label: 'XAUUSD', tv: 'OANDA:XAUUSD' },
+  { label: 'USA30', tv: 'OANDA:US30USD' },
+  { label: 'GER40', tv: 'OANDA:DE30EUR' },
+  { label: 'EURUSD', tv: 'OANDA:EURUSD' },
+  { label: 'GBPUSD', tv: 'OANDA:GBPUSD' },
+  { label: 'USDJPY', tv: 'OANDA:USDJPY' },
 ];
 
 const INTERVALS = [
@@ -41,14 +44,59 @@ const THEMES = [
   { id: 'dark', label: 'Dark', bg: '#131722', grid: '#1f2735' },
 ];
 
-export default function Charts() {
-  const [sym, setSym] = useState(INSTRUMENTS[0]);
+export default function Charts({ user }) {
+  const [list, setList] = useState(DEFAULT_WATCHLIST);
+  const [sym, setSym] = useState(DEFAULT_WATCHLIST[0]);
   const [tf, setTf] = useState('15');
   const [theme, setTheme] = useState('light');
   const [fs, setFs] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saveErr, setSaveErr] = useState(null);
   const host = useRef(null);
   const frame = useRef(null);
   const look = THEMES.find((t) => t.id === theme) || THEMES[0];
+
+  // ---- watchlist --------------------------------------------------------
+  useEffect(() => {
+    if (!user?.id || !user?.session_token) return;
+    callWatchlist('watchlist_get', { user_id: user.id, session_token: user.session_token })
+      .then((d) => {
+        if (Array.isArray(d.symbols) && d.symbols.length) {
+          setList(d.symbols);
+          setSym(d.symbols[0]);
+        }
+      })
+      .catch(() => {});   // a watchlist that won't load must not break the chart
+  }, [user?.id, user?.session_token]);
+
+  const persist = useCallback((next) => {
+    setList(next);
+    setSaveErr(null);
+    if (!user?.id || !user?.session_token) return;
+    callWatchlist('watchlist_save', {
+      user_id: user.id, session_token: user.session_token, symbols: next,
+    }).catch(() => setSaveErr("Couldn't save your list — it'll reset on reload."));
+  }, [user?.id, user?.session_token]);
+
+  function addSymbol() {
+    const tvRaw = draft.trim().toUpperCase();
+    if (!tvRaw) { setAdding(false); return; }
+    // a bare ticker gets OANDA, which covers the FX and index CFDs students use
+    const tv = tvRaw.includes(':') ? tvRaw : `OANDA:${tvRaw}`;
+    if (list.some((i) => i.tv === tv)) { setDraft(''); setAdding(false); return; }
+    const item = { tv, label: tv.split(':').pop() };
+    persist([...list, item]);
+    setSym(item);
+    setDraft('');
+    setAdding(false);
+  }
+
+  function removeSymbol(tv) {
+    const next = list.filter((i) => i.tv !== tv);
+    persist(next.length ? next : DEFAULT_WATCHLIST);
+    if (sym.tv === tv) setSym((next.length ? next : DEFAULT_WATCHLIST)[0]);
+  }
 
   useEffect(() => {
     const onChange = () => setFs(document.fullscreenElement === frame.current);
@@ -119,32 +167,101 @@ export default function Charts() {
       >
       <div
         style={{
-          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10,
+          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center',
         }}
       >
-        {INSTRUMENTS.map((i) => {
-          const on = i.id === sym.id;
+        {list.map((i) => {
+          const on = i.tv === sym.tv;
           return (
-            <button
-              key={i.id}
-              onClick={() => setSym(i)}
-              title={i.sub}
+            // The pill is one control with a remove button riding inside it, so
+            // clicking the name never also deletes it.
+            <span
+              key={i.tv}
               style={{
+                display: 'inline-flex', alignItems: 'center',
                 border: `1px solid ${on ? 'var(--gold)' : 'var(--line)'}`,
                 background: on ? 'var(--gold)' : 'var(--panel)',
-                color: on ? '#fff' : 'var(--ink-soft)',
                 borderRadius: 999,
-                padding: '7px 14px',
-                fontSize: 13,
-                fontWeight: on ? 600 : 500,
                 transition: 'all .15s',
               }}
             >
-              {i.label}
-            </button>
+              <button
+                onClick={() => setSym(i)}
+                title={i.tv}
+                style={{
+                  border: 'none', background: 'transparent',
+                  color: on ? '#fff' : 'var(--ink-soft)',
+                  padding: '7px 4px 7px 14px',
+                  fontSize: 13,
+                  fontWeight: on ? 600 : 500,
+                }}
+              >
+                {i.label}
+              </button>
+              <button
+                onClick={() => removeSymbol(i.tv)}
+                title={`Remove ${i.label}`}
+                aria-label={`Remove ${i.label}`}
+                style={{
+                  border: 'none', background: 'transparent',
+                  color: on ? 'rgba(255,255,255,.75)' : 'var(--ink-faint)',
+                  padding: '7px 11px 7px 4px',
+                  fontSize: 13, lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </span>
           );
         })}
+
+        {adding ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') addSymbol();
+                if (e.key === 'Escape') { setDraft(''); setAdding(false); }
+              }}
+              placeholder="EURUSD"
+              style={{
+                width: 128, border: '1px solid var(--line)', background: 'var(--panel)',
+                color: 'var(--ink)', borderRadius: 999, padding: '7px 13px',
+                fontSize: 13, fontFamily: 'var(--mono)',
+              }}
+            />
+            <button
+              onClick={addSymbol}
+              style={{
+                border: '1px solid var(--gold)', background: 'var(--gold)', color: '#fff',
+                borderRadius: 999, padding: '7px 13px', fontSize: 13, fontWeight: 600,
+              }}
+            >
+              Add
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            title="Add a symbol to your watchlist"
+            style={{
+              border: '1px dashed var(--line)', background: 'transparent',
+              color: 'var(--ink-faint)', borderRadius: 999,
+              padding: '7px 14px', fontSize: 13, fontWeight: 500,
+            }}
+          >
+            + Add
+          </button>
+        )}
       </div>
+
+      {saveErr && (
+        <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--danger, #c0392b)' }}>
+          {saveErr}
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
         {INTERVALS.map((t) => {
@@ -245,6 +362,9 @@ export default function Charts() {
       </div>
 
       <p className="hint" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--ink-faint)' }}>
+        Your watchlist is saved to your account, so it follows you to any device. Type a plain
+        ticker like <code>EURUSD</code> to add one, or an exchange-qualified symbol such as
+        <code>NASDAQ:AAPL</code> if you want a specific feed.
         Click once on the chart first so it has focus, then the shortcuts above place a tool
         straight away. Every other tool's shortcut is listed beside its name in the toolbar
         menus. Prices are live via TradingView, shown in SAST — they're indicative, so your
